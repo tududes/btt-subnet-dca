@@ -2,46 +2,64 @@ import bittensor as bt
 import asyncio
 import sys
 import os
+import argparse
 from datetime import datetime, timedelta, timezone
 
-# Add TEST_MODE environment variable check
-TEST_MODE = os.getenv('TEST_MODE', '').lower() in ('true', '1', 't')
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description='Bittensor DCA (dTAO) bot for automated staking/unstaking based on EMA',
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+    )
+    parser.add_argument(
+        '--netuid',
+        type=int,
+        required=True,
+        help='The netuid of the subnet to operate on'
+    )
+    parser.add_argument(
+        '--wallet',
+        type=str,
+        required=True,
+        help='The name of the wallet to use'
+    )
+    parser.add_argument(
+        '--slippage',
+        type=float,
+        required=True,
+        help='Target slippage in TAO (e.g., 0.0001)'
+    )
+    parser.add_argument(
+        '--budget',
+        type=float,
+        required=True,
+        help='Maximum TAO budget to use'
+    )
+    parser.add_argument(
+        '--test',
+        action='store_true',
+        help='Run in test mode without making actual transactions'
+    )
+    return parser.parse_args()
 
+# Constants
 BLOCK_TIME_SECONDS = 12   
-SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO
+SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO)
 
+# Parse command line arguments
+args = parse_arguments()
 
-if len(sys.argv) < 2:
-    print("Usage: python btt_subnet_dca.py <netuid>")
-    sys.exit(1)
-netuid = int(sys.argv[1])
-
-if len(sys.argv) < 3:
-    print("Usage: python btt_subnet_dca.py <netuid> <wallet_name>")
-    sys.exit(1)
-wallet_name = sys.argv[2]
-
-if len(sys.argv) < 4:
-    print("Usage: python btt_subnet_dca.py <netuid> <wallet_name> <slippage_target>")
-    sys.exit(1)
-slippage_target = float(sys.argv[3])
-
-if len(sys.argv) < 5:
-    print("Usage: python btt_subnet_dca.py <netuid> <wallet_name> <slippage_target> <max_tao_budget>")
-    sys.exit(1)
-max_tao_budget = float(sys.argv[4])
-
+# Set test mode from arguments
+TEST_MODE = args.test
 
 try:
-    wallet = bt.wallet(name=wallet_name)
+    wallet = bt.wallet(name=args.wallet)
     wallet.unlock_coldkey()
 except Exception as e:
     print(f"Error getting wallet: {e}")
     sys.exit(1)
 
-
 async def chase_ema(netuid, wallet):
-    remaining_budget = max_tao_budget  # Initialize remaining budget
+    remaining_budget = args.budget  # Initialize remaining budget
     
     async with bt.AsyncSubtensor('finney') as sub:
         while remaining_budget > 0:  # Continue only if we have budget left
@@ -83,7 +101,7 @@ async def chase_ema(netuid, wallet):
             print("-" * 50)
 
             # Binary search with remaining budget as max
-            target_slippage = slippage_target  # in tao
+            target_slippage = args.slippage  # in tao
             min_increment = 0.0
             max_increment = min(1.0, remaining_budget)
             best_increment = 0.0
@@ -162,22 +180,24 @@ async def chase_ema(netuid, wallet):
                 print("Price is equal to moving_price! DO NOTHING!")
                 continue  # Don't decrement budget if no action taken
 
-            current_stake = sub.get_stake(
+            current_stake = await sub.get_stake(
                 coldkey_ss58 = wallet.coldkeypub.ss58_address,
                 hotkey_ss58 = subnet_info.owner_hotkey,
                 netuid = netuid,
             )
 
-            print(f'netuid {netuid} stake: {current_stake}')
+            balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
+            print(f'wallet balance: {balance}τ')
+            print(f'netuid {netuid} stake: {current_stake}{subnet_info.symbol}')
 
             # wait for block before next iteration
             await sub.wait_for_block()
 
-        print(f"Budget exhausted. Total used: {max_tao_budget - remaining_budget:.6f}")
+        print(f"Budget exhausted. Total used: {args.budget - remaining_budget:.6f}")
 
 async def main():
     # continue loop perpetually
     while True:
-        await chase_ema(netuid, wallet)
+        await chase_ema(args.netuid, wallet)
 
 asyncio.run(main())
