@@ -1,4 +1,3 @@
-import bittensor as bt
 import asyncio
 import sys
 import os
@@ -16,7 +15,8 @@ This script will chase the EMA of the price of TAO and:
 Example usage:
   python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --min-price-diff 0.05 --test
 ''',
-        formatter_class=argparse.RawDescriptionHelpFormatter
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        prog='btt_subnet_dca.py'
     )
     
     # Required arguments
@@ -43,7 +43,7 @@ Example usage:
         '--slippage',
         type=float,
         required=True,
-        help='Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes.'
+        help='Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes'
     )
     required.add_argument(
         '--budget',
@@ -53,39 +53,40 @@ Example usage:
     )
     
     # Optional arguments
-    optional = parser.add_argument_group('optional arguments')
-    optional.add_argument(
+    parser.add_argument(
         '--test',
         action='store_true',
         help='Run in test mode without making actual transactions (recommended for first run)'
     )
-    optional.add_argument(
+    parser.add_argument(
         '--min-price-diff',
         type=float,
         default=0.0,
         help='Minimum price difference from EMA to operate (e.g., 0.05 for 5%% from EMA)'
     )
-    optional.add_argument(
+    parser.add_argument(
         '--one-way-mode',
         choices=['stake', 'unstake'],
         help='Restrict operations to only staking or only unstaking (default: both)'
     )
-    
-    args = parser.parse_args()
     
     # Print help if no arguments are provided
     if len(sys.argv) == 1:
         parser.print_help()
         sys.exit(1)
         
+    args = parser.parse_args()
     return args
+
+# Parse command line arguments first
+args = parse_arguments()
+
+# Import bittensor after argument parsing to avoid its arguments showing in help
+import bittensor as bt
 
 # Constants
 BLOCK_TIME_SECONDS = 12   
 SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO)
-
-# Parse command line arguments
-args = parse_arguments()
 
 # Set test mode from arguments
 TEST_MODE = args.test
