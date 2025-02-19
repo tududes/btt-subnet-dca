@@ -2,6 +2,14 @@
 
 The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the price of TAO and buy TAO when the price is below the EMA and sell TAO when the price is above the EMA.
 
+## Important: Test Mode
+
+It's strongly recommended to first run the bot in test mode to understand its behavior without making actual transactions. Test mode will simulate all operations without performing real stakes/unstakes.
+
+To run in test mode, simply add TEST_MODE=true before your command:
+```bash
+TEST_MODE=true python3 btt_subnet_dca.py <netuid> <wallet_name> <slippage_target> <max_tao_budget>
+```
 
 ## Setup
 
@@ -27,7 +35,12 @@ pip install -r requirements.txt
 ```bash
 cd $HOME/btt-subnet-dca
 source .venv/bin/activate
-python btt_subnet_dca.py <netuid> <wallet_name> <slippage_target> <max_tao_budget>
+
+# Test mode (recommended for first run):
+TEST_MODE=true python btt_subnet_dca.py <netuid> <wallet_name> <slippage_target> <max_tao_budget>
+
+# Production mode (after testing):
+python3 btt_subnet_dca.py <netuid> <wallet_name> <slippage_target> <max_tao_budget>
 ```
 
 ## Example
@@ -35,5 +48,10 @@ This will run the script on the subnet with the wallet named `coldkey-01` with a
 ```bash
 cd $HOME/btt-subnet-dca
 source .venv/bin/activate
+
+# Test mode example:
+TEST_MODE=true python3 btt_subnet_dca.py 19 coldkey-01 0.0001 5
+
+# Production mode example:
 python3 btt_subnet_dca.py 19 coldkey-01 0.0001 5
 ```

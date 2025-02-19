@@ -1,7 +1,11 @@
 import bittensor as bt
 import asyncio
 import sys
+import os
 from datetime import datetime, timedelta, timezone
+
+# Add TEST_MODE environment variable check
+TEST_MODE = os.getenv('TEST_MODE', '').lower() in ('true', '1', 't')
 
 BLOCK_TIME_SECONDS = 12   
 SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO
@@ -119,15 +123,18 @@ async def chase_ema(netuid, wallet):
                 # SELL ALPHA TOKENS!
 
                 print(f"slippage for subnet {netuid}", subnet_info.slippage(increment))
-                try:
-                    sub.unstake( 
-                        wallet = wallet, 
-                        netuid = netuid, 
-                        hotkey = subnet_info.owner_hotkey, 
-                        tao_amount = increment, 
-                    )
-                except Exception as e:
-                    print(f"Error unstaking: {e}")
+                if not TEST_MODE:
+                    try:
+                        sub.unstake( 
+                            wallet = wallet, 
+                            netuid = netuid, 
+                            hotkey = subnet_info.owner_hotkey, 
+                            tao_amount = increment, 
+                        )
+                    except Exception as e:
+                        print(f"Error unstaking: {e}")
+                else:
+                    print(f"TEST MODE: Would have unstaked {increment} TAO")
                     
                 print (f'netuid {netuid} stake removed: increment {increment} @ price {alpha_price}')
 
@@ -136,15 +143,18 @@ async def chase_ema(netuid, wallet):
                 # STAKE TAO TO SUBNET!
 
                 print(f"slippage for subnet {netuid}", subnet_info.slippage(increment))
-                try:
-                    sub.add_stake( 
-                        wallet = wallet, 
-                        netuid = netuid, 
-                        hotkey = subnet_info.owner_hotkey, 
-                        tao_amount = increment, 
-                    )
-                except Exception as e:
-                    print(f"Error staking: {e}")
+                if not TEST_MODE:
+                    try:
+                        sub.add_stake( 
+                            wallet = wallet, 
+                            netuid = netuid, 
+                            hotkey = subnet_info.owner_hotkey, 
+                            tao_amount = increment, 
+                        )
+                    except Exception as e:
+                        print(f"Error staking: {e}")
+                else:
+                    print(f"TEST MODE: Would have staked {increment} TAO")
 
                 print (f'netuid {netuid} stake added: increment {increment} @ price {alpha_price}')
 
