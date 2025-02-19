@@ -84,27 +84,35 @@ class SubnetDCADatabase:
                        ema_price: float, slippage: float, success: bool,
                        error_msg: str = None, test_mode: bool = False):
         """Log a stake/unstake transaction"""
-        wallet_id = self.get_or_create_wallet(coldkey, hotkey)
-        price_diff = (price_tao - ema_price) / ema_price
+        try:
+            wallet_id = self.get_or_create_wallet(coldkey, hotkey)
+            price_diff = (price_tao - ema_price) / ema_price
 
-        with self.conn:
-            self.conn.execute('''
-                INSERT INTO transactions (
-                    wallet_id, operation, amount_tao, amount_alpha, 
-                    price_tao, ema_price_tao, price_diff_pct, slippage_tao,
-                    success, error_message, test_mode
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ''', (wallet_id, operation, amount_tao, amount_alpha, price_tao,
-                 ema_price, price_diff, slippage, success, error_msg, test_mode))
+            with self.conn:
+                self.conn.execute('''
+                    INSERT INTO transactions (
+                        wallet_id, operation, amount_tao, amount_alpha, 
+                        price_tao, ema_price_tao, price_diff_pct, slippage_tao,
+                        success, error_message, test_mode
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ''', (wallet_id, operation, amount_tao, amount_alpha, price_tao,
+                     ema_price, price_diff, slippage, success, error_msg, test_mode))
+                print(f"📝 Logged {operation} transaction for wallet {wallet_id}")
+        except Exception as e:
+            print(f"❌ Error logging transaction: {e}")
 
     def update_balances(self, coldkey: str, hotkey: str, tao_balance: float, alpha_stake: float):
         """Update current balances for a wallet"""
-        wallet_id = self.get_or_create_wallet(coldkey, hotkey)
-        with self.conn:
-            self.conn.execute('''
-                INSERT INTO balances (wallet_id, tao_balance, alpha_stake)
-                VALUES (?, ?, ?)
-            ''', (wallet_id, tao_balance, alpha_stake))
+        try:
+            wallet_id = self.get_or_create_wallet(coldkey, hotkey)
+            with self.conn:
+                self.conn.execute('''
+                    INSERT INTO balances (wallet_id, tao_balance, alpha_stake)
+                    VALUES (?, ?, ?)
+                ''', (wallet_id, tao_balance, alpha_stake))
+                print(f"📝 Updated balances for wallet {wallet_id}")
+        except Exception as e:
+            print(f"❌ Error updating balances: {e}")
 
     def get_wallet_stats(self, coldkey: str, period: str = '24h'):
         """Get wallet statistics for a given time period"""

@@ -451,10 +451,35 @@ async def chase_ema(netuid, wallet):
                             netuid = netuid,
                             amount = bt.Balance.from_tao(increment), 
                         )
+                        db.log_transaction(
+                            coldkey=wallet.coldkeypub.ss58_address,
+                            hotkey=wallet.hotkey.ss58_address,
+                            operation='stake',
+                            amount_tao=increment,
+                            amount_alpha=increment/alpha_price,  # Convert TAO to alpha
+                            price_tao=alpha_price,
+                            ema_price=moving_price,
+                            slippage=float(subnet_info.slippage(increment)[1].tao),
+                            success=True,
+                            test_mode=TEST_MODE
+                        )
                         print(f"✅ Successfully staked {increment:.6f} TAO @ {alpha_price:.6f} to cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
                         if args.budget > 0:
                             remaining_budget -= increment
                     except Exception as e:
+                        db.log_transaction(
+                            coldkey=wallet.coldkeypub.ss58_address,
+                            hotkey=wallet.hotkey.ss58_address,
+                            operation='stake',
+                            amount_tao=increment,
+                            amount_alpha=increment/alpha_price,
+                            price_tao=alpha_price,
+                            ema_price=moving_price,
+                            slippage=float(subnet_info.slippage(increment)[1].tao),
+                            success=False,
+                            error_msg=str(e),
+                            test_mode=TEST_MODE
+                        )
                         print(f"❌ Error staking: {e}")
                 else:
                     print(f"🧪 TEST MODE: Would have staked {increment:.6f} TAO to cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
