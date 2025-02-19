@@ -1,6 +1,6 @@
 # 🤖 Bittensor Subnet DCA (dTAO)
 
-The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the price of TAO and buy TAO when the price is below the EMA and sell TAO when the price is above the EMA.
+The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the price of TAO and stake TAO into Alpha when the price is below the EMA and unstake Alpha into TAO when the price is above the EMA.
 
 
 ## 🔍 How It Works

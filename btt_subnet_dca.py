@@ -14,8 +14,8 @@ def parse_arguments():
         description='''
 🤖 Bittensor Subnet DCA (dTAO) bot for automated staking/unstaking based on EMA.
 This script will chase the EMA of the price of TAO and:
-📈 Buy TAO when the price is below the EMA
-📉 Sell TAO when the price is above the EMA
+📈 Stake TAO when the price is below the EMA
+📉 Unstake TAO when the price is above the EMA
 
 💡 Example usage:
   python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --min-price-diff 0.05 --test
