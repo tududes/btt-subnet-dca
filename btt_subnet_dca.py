@@ -7,39 +7,67 @@ from datetime import datetime, timedelta, timezone
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
-        description='Bittensor DCA (dTAO) bot for automated staking/unstaking based on EMA',
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        description='''
+Bittensor DCA (dTAO) bot for automated staking/unstaking based on EMA.
+This script will chase the EMA of the price of TAO and:
+- Buy TAO when the price is below the EMA
+- Sell TAO when the price is above the EMA
+
+Example usage:
+  python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey default --slippage 0.0001 --budget 1 --test
+''',
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument(
+    
+    # Required arguments
+    required = parser.add_argument_group('required arguments')
+    required.add_argument(
         '--netuid',
         type=int,
         required=True,
-        help='The netuid of the subnet to operate on'
+        help='The netuid of the subnet to operate on (e.g., 19 for inference subnet)'
     )
-    parser.add_argument(
+    required.add_argument(
         '--wallet',
         type=str,
         required=True,
-        help='The name of the wallet to use'
+        help='The name of your wallet'
     )
-    parser.add_argument(
+    required.add_argument(
+        '--hotkey',
+        type=str,
+        required=True,
+        help='The name of the hotkey to use'
+    )
+    required.add_argument(
         '--slippage',
         type=float,
         required=True,
-        help='Target slippage in TAO (e.g., 0.0001)'
+        help='Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes.'
     )
-    parser.add_argument(
+    required.add_argument(
         '--budget',
         type=float,
         required=True,
-        help='Maximum TAO budget to use'
+        help='Maximum TAO budget to use for trading operations'
     )
-    parser.add_argument(
+    
+    # Optional arguments
+    optional = parser.add_argument_group('optional arguments')
+    optional.add_argument(
         '--test',
         action='store_true',
-        help='Run in test mode without making actual transactions'
+        help='Run in test mode without making actual transactions (recommended for first run)'
     )
-    return parser.parse_args()
+    
+    args = parser.parse_args()
+    
+    # Print help if no arguments are provided
+    if len(sys.argv) == 1:
+        parser.print_help()
+        sys.exit(1)
+        
+    return args
 
 # Constants
 BLOCK_TIME_SECONDS = 12   
@@ -52,10 +80,10 @@ args = parse_arguments()
 TEST_MODE = args.test
 
 try:
-    wallet = bt.wallet(name=args.wallet)
+    wallet = bt.wallet(name=args.wallet, hotkey=args.hotkey)
     wallet.unlock_coldkey()
 except Exception as e:
-    print(f"Error getting wallet: {e}")
+    print(f"\nError accessing wallet: {e}")
     sys.exit(1)
 
 async def chase_ema(netuid, wallet):
@@ -143,11 +171,10 @@ async def chase_ema(netuid, wallet):
                 print(f"slippage for subnet {netuid}", subnet_info.slippage(increment))
                 if not TEST_MODE:
                     try:
-                        sub.unstake( 
+                        await sub.unstake( 
                             wallet = wallet, 
-                            netuid = netuid, 
-                            hotkey = subnet_info.owner_hotkey, 
-                            tao_amount = increment, 
+                            netuid = netuid,
+                            amount = bt.Balance.from_tao(increment), 
                         )
                     except Exception as e:
                         print(f"Error unstaking: {e}")
@@ -163,11 +190,10 @@ async def chase_ema(netuid, wallet):
                 print(f"slippage for subnet {netuid}", subnet_info.slippage(increment))
                 if not TEST_MODE:
                     try:
-                        sub.add_stake( 
+                        await sub.add_stake( 
                             wallet = wallet, 
-                            netuid = netuid, 
-                            hotkey = subnet_info.owner_hotkey, 
-                            tao_amount = increment, 
+                            netuid = netuid,
+                            amount = bt.Balance.from_tao(increment), 
                         )
                     except Exception as e:
                         print(f"Error staking: {e}")
