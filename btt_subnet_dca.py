@@ -12,7 +12,7 @@ SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $5
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description='''
-🤖 Bittensor DCA (dTAO) bot for automated staking/unstaking based on EMA.
+🤖 Bittensor Subnet DCA (dTAO) bot for automated staking/unstaking based on EMA.
 This script will chase the EMA of the price of TAO and:
 📈 Buy TAO when the price is below the EMA
 📉 Sell TAO when the price is above the EMA
