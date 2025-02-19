@@ -112,9 +112,9 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
 - `--budget`: Maximum TAO budget to use for trading operations
 
 #### 🔧 Optional Arguments:
-- `--test`: Run in test mode without making actual transactions (recommended for first run)
 - `--min-price-diff`: Minimum price difference from EMA to operate (e.g., 0.05 for 5% from EMA)
 - `--one-way-mode`: Restrict operations to only staking or only unstaking. Options: stake, unstake (default: both)
+- `--test`: Run in test mode without making actual transactions (recommended for first run)
 
 ## 📋 Examples
 

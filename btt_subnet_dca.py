@@ -4,6 +4,11 @@ import os
 import argparse
 from datetime import datetime, timedelta, timezone
 
+# Constants
+BLOCK_TIME_SECONDS = 12   
+SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO)
+
+
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description='''
@@ -54,11 +59,6 @@ This script will chase the EMA of the price of TAO and:
     
     # Optional arguments
     parser.add_argument(
-        '--test',
-        action='store_true',
-        help='🧪 Run in test mode without making actual transactions (recommended for first run)'
-    )
-    parser.add_argument(
         '--min-price-diff',
         type=float,
         default=0.0,
@@ -69,7 +69,12 @@ This script will chase the EMA of the price of TAO and:
         choices=['stake', 'unstake'],
         help='↕️ Restrict operations to only staking or only unstaking (default: both)'
     )
-    
+    parser.add_argument(
+        '--test',
+        action='store_true',
+        help='🧪 Run in test mode without making actual transactions (recommended for first run)'
+    )
+
     # Print help if no arguments are provided
     if len(sys.argv) == 1:
         parser.print_help()
@@ -78,17 +83,13 @@ This script will chase the EMA of the price of TAO and:
     args = parser.parse_args()
     return args
 
-# Parse command line arguments first
 args = parse_arguments()
+
 
 # Import bittensor after argument parsing to avoid its arguments showing in help
 import bittensor as bt
 
-# Constants
-BLOCK_TIME_SECONDS = 12   
-SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO)
 
-# Set test mode from arguments
 TEST_MODE = args.test
 
 try:
@@ -288,7 +289,7 @@ async def chase_ema(netuid, wallet):
         print(f"\n✨ Budget exhausted. Total used: {args.budget - remaining_budget:.6f} TAO")
 
 async def main():
-    # continue loop perpetually
+    # perpetually chase the EMA
     while True:
         await chase_ema(args.netuid, wallet)
 
