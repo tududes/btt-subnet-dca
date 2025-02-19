@@ -240,7 +240,7 @@ async def chase_ema(netuid, wallet):
 
             current_stake = await sub.get_stake(
                 coldkey_ss58 = wallet.coldkeypub.ss58_address,
-                hotkey_ss58 = subnet_info.owner_hotkey,
+                hotkey_ss58 = wallet.hotkey.ss58_address,
                 netuid = netuid,
             )
 

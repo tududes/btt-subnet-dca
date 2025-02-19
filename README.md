@@ -2,6 +2,39 @@
 
 The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the price of TAO and buy TAO when the price is below the EMA and sell TAO when the price is above the EMA.
 
+
+## How It Works
+
+### EMA Trading Strategy
+The script implements a simple trading strategy based on the Exponential Moving Average (EMA) of the TAO price:
+- When the current price is **below** the EMA: The script will **stake TAO** to the subnet, effectively "buying" at a lower price
+- When the current price is **above** the EMA: The script will **unstake TAO** from the subnet, effectively "selling" at a higher price
+
+This strategy aims to accumulate more TAO over time by consistently buying low and selling high relative to the moving average.
+
+### Slippage Auto-Tuning
+The script uses a binary search algorithm to automatically find the optimal trade size that matches your target slippage:
+1. For each trade, it starts with your remaining budget as the maximum possible trade size
+2. It then performs a binary search to find the largest trade size that stays within your slippage target
+3. If the calculated slippage would be too high, it reduces the trade size
+4. If the calculated slippage would be too low, it increases the trade size
+5. This process continues until it finds the optimal trade size that matches your target slippage
+
+This auto-tuning ensures that:
+- Large trades are broken into smaller pieces to minimize price impact
+- Each trade maintains your desired slippage target
+- The script adapts to changing market conditions automatically
+
+
+## ⚠️ Important Warnings
+
+### Test Mode
+It's strongly recommended to first run the bot in test mode to understand its behavior without making actual transactions. Test mode will simulate all operations without performing real stakes/unstakes.
+
+### Supervision Required
+This script performs automatic trading operations with real TAO. Do not leave it running unattended unless you fully understand its behavior and intentionally choose to do so. Market conditions can change rapidly, and continuous supervision is recommended during initial usage.
+
+
 ## ⚠️ Important Considerations
 
 ### Preventing Self-Competition
@@ -40,35 +73,6 @@ When running multiple instances of this script, it's important to avoid having y
    python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --min-price-diff 0.05 --slippage 0.0001 --budget 1
    ```
 
-## How It Works
-
-### EMA Trading Strategy
-The script implements a simple trading strategy based on the Exponential Moving Average (EMA) of the TAO price:
-- When the current price is **below** the EMA: The script will **stake TAO** to the subnet, effectively "buying" at a lower price
-- When the current price is **above** the EMA: The script will **unstake TAO** from the subnet, effectively "selling" at a higher price
-
-This strategy aims to accumulate more TAO over time by consistently buying low and selling high relative to the moving average.
-
-### Slippage Auto-Tuning
-The script uses a binary search algorithm to automatically find the optimal trade size that matches your target slippage:
-1. For each trade, it starts with your remaining budget as the maximum possible trade size
-2. It then performs a binary search to find the largest trade size that stays within your slippage target
-3. If the calculated slippage would be too high, it reduces the trade size
-4. If the calculated slippage would be too low, it increases the trade size
-5. This process continues until it finds the optimal trade size that matches your target slippage
-
-This auto-tuning ensures that:
-- Large trades are broken into smaller pieces to minimize price impact
-- Each trade maintains your desired slippage target
-- The script adapts to changing market conditions automatically
-
-## ⚠️ Important Warnings
-
-### Test Mode
-It's strongly recommended to first run the bot in test mode to understand its behavior without making actual transactions. Test mode will simulate all operations without performing real stakes/unstakes.
-
-### Supervision Required
-This script performs automatic trading operations with real TAO. Do not leave it running unattended unless you fully understand its behavior and intentionally choose to do so. Market conditions can change rapidly, and continuous supervision is recommended during initial usage.
 
 ## Setup
 
