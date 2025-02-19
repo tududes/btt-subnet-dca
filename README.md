@@ -1,18 +1,18 @@
-# Bittensor Subnet DCA (dTAO)
+# 🤖 Bittensor Subnet DCA (dTAO)
 
 The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the price of TAO and buy TAO when the price is below the EMA and sell TAO when the price is above the EMA.
 
 
-## How It Works
+## 🔍 How It Works
 
-### EMA Trading Strategy
+### 📈 EMA Trading Strategy
 The script implements a simple trading strategy based on the Exponential Moving Average (EMA) of the TAO price:
 - When the current price is **below** the EMA: The script will **stake TAO** to the subnet, effectively "buying" at a lower price
 - When the current price is **above** the EMA: The script will **unstake TAO** from the subnet, effectively "selling" at a higher price
 
 This strategy aims to accumulate more TAO over time by consistently buying low and selling high relative to the moving average.
 
-### Slippage Auto-Tuning
+### ⚡ Slippage Auto-Tuning
 The script uses a binary search algorithm to automatically find the optimal trade size that matches your target slippage:
 1. For each trade, it starts with your remaining budget as the maximum possible trade size
 2. It then performs a binary search to find the largest trade size that stays within your slippage target
@@ -28,19 +28,19 @@ This auto-tuning ensures that:
 
 ## ⚠️ Important Warnings
 
-### Test Mode
+### 🧪 Test Mode
 It's strongly recommended to first run the bot in test mode to understand its behavior without making actual transactions. Test mode will simulate all operations without performing real stakes/unstakes.
 
-### Supervision Required
+### 👀 Supervision Required
 This script performs automatic trading operations with real TAO. Do not leave it running unattended unless you fully understand its behavior and intentionally choose to do so. Market conditions can change rapidly, and continuous supervision is recommended during initial usage.
 
 
-## ⚠️ Important Considerations
+## 💡 Important Considerations
 
-### Preventing Self-Competition
+### 🔄 Preventing Self-Competition
 When running multiple instances of this script, it's important to avoid having your instances compete against each other. Here are some strategies to prevent self-competition:
 
-1. **Price Zone Strategy**:
+1. **📊 Price Zone Strategy**:
    - Use the `--min-price-diff` flag to specify how far from the EMA the script should operate
    - Example: Run one instance at 5% from EMA, another at 10% from EMA
    - This creates non-overlapping price zones for each instance
@@ -52,7 +52,7 @@ When running multiple instances of this script, it's important to avoid having y
    python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --min-price-diff 0.10 --slippage 0.0001 --budget 1
    ```
 
-2. **One-Way Operation**:
+2. **↕️ One-Way Operation**:
    - Use the `--one-way-mode` flag to restrict instances to either staking or unstaking
    - This prevents instances from competing in opposite directions
    ```bash
@@ -63,7 +63,7 @@ When running multiple instances of this script, it's important to avoid having y
    python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --slippage 0.0001 --budget 1
    ```
 
-3. **Combined Strategy**:
+3. **🔀 Combined Strategy**:
    - Combine price zones with one-way operation for maximum control
    ```bash
    # Instance 1: Stakes only, 5% below EMA
@@ -74,16 +74,16 @@ When running multiple instances of this script, it's important to avoid having y
    ```
 
 
-## Setup
+## 🛠️ Setup
 
-### Install python 3.11
+### 📦 Install python 3.11
 ```bash
 sudo add-apt-repository ppa:deadsnakes/ppa
 sudo apt update
 sudo apt install -y python3.11 python3.11-venv
 ```
 
-### Clone the repository and install dependencies
+### 📥 Clone the repository and install dependencies
 ```bash
 cd $HOME
 git clone https://github.com/korbondev/btt-subnet-dca
@@ -94,7 +94,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Usage
+## 📝 Usage
 ```bash
 cd $HOME/btt-subnet-dca
 source .venv/bin/activate
@@ -102,23 +102,23 @@ source .venv/bin/activate
 python3 btt_subnet_dca.py --help  # Show help message and available options
 ```
 
-### Command Line Arguments
+### 🎮 Command Line Arguments
 
-#### Required Arguments:
+#### ⚡ Required Arguments:
 - `--netuid`: The subnet ID to operate on (e.g., 19 for inference subnet)
 - `--wallet`: The name of your wallet
 - `--hotkey`: The name of the hotkey to use
 - `--slippage`: Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes
 - `--budget`: Maximum TAO budget to use for trading operations
 
-#### Optional Arguments:
+#### 🔧 Optional Arguments:
 - `--test`: Run in test mode without making actual transactions (recommended for first run)
 - `--min-price-diff`: Minimum price difference from EMA to operate (e.g., 0.05 for 5% from EMA)
 - `--one-way-mode`: Restrict operations to only staking or only unstaking. Options: stake, unstake (default: both)
 
-## Examples
+## 📋 Examples
 
-### Test Mode Example
+### 🧪 Test Mode Example
 Run with test mode to simulate operations without making actual transactions:
 ```bash
 python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --test
@@ -190,7 +190,7 @@ wallet balance: τ2.971039286τ
 netuid 19 stake: t0.000000000t
 ```
 
-### Production Mode Example
+### 🚀 Production Mode Example
 Run in production mode with real transactions:
 ```bash
 python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1
@@ -284,18 +284,18 @@ netuid 19 stake: t0.000000000t
 ```
 
 
-## Further Improvements
+## 🔮 Further Improvements
 
-- Add a more sophisticated wallet management system, perhaps skipping the password prompt
-- Add a more sophisticated logging system
-- Webhooks to a Telegram channel or Discord server for live monitoring and alerts
-- Add configuration file support for persistent settings
+- 🔐 Add a more sophisticated wallet management system, perhaps skipping the password prompt
+- 📝 Add a more sophisticated logging system
+- 🔔 Webhooks to a Telegram channel or Discord server for live monitoring and alerts
+- ⚙️ Add configuration file support for persistent settings
 
 
 ## ⚠️ Final Notes
 
-### At your own risk
+### ⚖️ At your own risk
 This script is provided as-is for educational purposes. Use it at your own risk.
 
-### Support
+### 💬 Support
 If you need help, please read the [Bittensor documentation](https://docs.bittensor.com/) and join the [Bittensor Discord](https://discord.gg/MhsTXDc5), where you could ask politely for help understanding some the concepts in this script. Do not discuss prices or trading strategies, only concepts of working with the Bittensor library.

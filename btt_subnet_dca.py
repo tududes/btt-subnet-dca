@@ -7,12 +7,12 @@ from datetime import datetime, timedelta, timezone
 def parse_arguments():
     parser = argparse.ArgumentParser(
         description='''
-Bittensor DCA (dTAO) bot for automated staking/unstaking based on EMA.
+🤖 Bittensor DCA (dTAO) bot for automated staking/unstaking based on EMA.
 This script will chase the EMA of the price of TAO and:
-- Buy TAO when the price is below the EMA
-- Sell TAO when the price is above the EMA
+📈 Buy TAO when the price is below the EMA
+📉 Sell TAO when the price is above the EMA
 
-Example usage:
+💡 Example usage:
   python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --min-price-diff 0.05 --test
 ''',
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -25,49 +25,49 @@ Example usage:
         '--netuid',
         type=int,
         required=True,
-        help='The netuid of the subnet to operate on (e.g., 19 for inference subnet)'
+        help='🌐 The netuid of the subnet to operate on (e.g., 19 for inference subnet)'
     )
     required.add_argument(
         '--wallet',
         type=str,
         required=True,
-        help='The name of your wallet'
+        help='💼 The name of your wallet'
     )
     required.add_argument(
         '--hotkey',
         type=str,
         required=True,
-        help='The name of the hotkey to use'
+        help='🔑 The name of the hotkey to use'
     )
     required.add_argument(
         '--slippage',
         type=float,
         required=True,
-        help='Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes'
+        help='📊 Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes'
     )
     required.add_argument(
         '--budget',
         type=float,
         required=True,
-        help='Maximum TAO budget to use for trading operations'
+        help='💰 Maximum TAO budget to use for trading operations'
     )
     
     # Optional arguments
     parser.add_argument(
         '--test',
         action='store_true',
-        help='Run in test mode without making actual transactions (recommended for first run)'
+        help='🧪 Run in test mode without making actual transactions (recommended for first run)'
     )
     parser.add_argument(
         '--min-price-diff',
         type=float,
         default=0.0,
-        help='Minimum price difference from EMA to operate (e.g., 0.05 for 5%% from EMA)'
+        help='📏 Minimum price difference from EMA to operate (e.g., 0.05 for 5%% from EMA)'
     )
     parser.add_argument(
         '--one-way-mode',
         choices=['stake', 'unstake'],
-        help='Restrict operations to only staking or only unstaking (default: both)'
+        help='↕️ Restrict operations to only staking or only unstaking (default: both)'
     )
     
     # Print help if no arguments are provided
