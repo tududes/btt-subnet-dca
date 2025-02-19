@@ -4,6 +4,8 @@ import os
 import argparse
 from datetime import datetime, timedelta, timezone
 import getpass  # Add this import at the top
+from database import SubnetDCADatabase
+from reports import SubnetDCAReports
 
 # Constants
 SUBTENSOR = 'finney' # or use a local subtensor via ws://127.0.0.1:9944
@@ -112,6 +114,12 @@ TEST_MODE = args.test
 
 # Import bittensor after argument parsing to avoid its arguments showing in help
 import bittensor as bt
+
+# Initialize database at the start
+db = SubnetDCADatabase()
+
+# Add after initializing database
+reports = SubnetDCAReports(db)
 
 def get_wallet_groups():
     """Group hotkeys by their coldkey (wallet) and return organized structure"""
@@ -386,10 +394,35 @@ async def chase_ema(netuid, wallet):
                             netuid = netuid,
                             amount = bt.Balance.from_float(alpha_amount), 
                         )
+                        db.log_transaction(
+                            coldkey=wallet.coldkeypub.ss58_address,
+                            hotkey=wallet.hotkey.ss58_address,
+                            operation='unstake',
+                            amount_tao=total_tao_impact,
+                            amount_alpha=alpha_amount,
+                            price_tao=alpha_price,
+                            ema_price=moving_price,
+                            slippage=float(tao_conversion[1].tao),
+                            success=True,
+                            test_mode=TEST_MODE
+                        )
                         print(f"✅ Successfully unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ @ {alpha_price:.6f} from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
                         if args.budget > 0:
                             remaining_budget -= total_tao_impact
                     except Exception as e:
+                        db.log_transaction(
+                            coldkey=wallet.coldkeypub.ss58_address,
+                            hotkey=wallet.hotkey.ss58_address,
+                            operation='unstake',
+                            amount_tao=total_tao_impact,
+                            amount_alpha=alpha_amount,
+                            price_tao=alpha_price,
+                            ema_price=moving_price,
+                            slippage=float(tao_conversion[1].tao),
+                            success=False,
+                            error_msg=str(e),
+                            test_mode=TEST_MODE
+                        )
                         print(f"❌ Error unstaking: {e}")
                 else:
                     print(f"🧪 TEST MODE: Would have unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
@@ -443,9 +476,20 @@ async def chase_ema(netuid, wallet):
             print(f"{'Stake':20}: {current_stake}{subnet_info.symbol}")
             print("-" * 40)
 
+            # Update balances after each operation
+            db.update_balances(
+                coldkey=wallet.coldkeypub.ss58_address,
+                hotkey=wallet.hotkey.ss58_address,
+                tao_balance=float(balance),
+                alpha_stake=float(current_stake)
+            )
+
             # After successful operation or skip
             if args.rotate_all_wallets:
                 print("\n⏭️ Moving to next wallet...")
+                print("\n📈 Activity Summary")
+                reports.print_summary()
+                reports.print_wallet_summary(wallet.coldkeypub.ss58_address)
                 return
             
             # For single wallet mode, continue to next block

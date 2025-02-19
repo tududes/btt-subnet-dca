@@ -30,6 +30,84 @@ This auto-tuning ensures that:
 - Each trade maintains your desired slippage target
 - The script adapts to changing market conditions automatically
 
+### 📊 Database & Reporting
+The script maintains a SQLite database to track all operations and provides detailed reporting:
+
+#### Database Features:
+- Tracks all wallet operations
+- Records transaction success/failure
+- Stores historical price data
+- Maintains balance history
+
+#### Real-time Reports:
+- Activity summaries for 6h, 12h, 24h, 48h, and 72h periods
+- Per-wallet statistics
+- Transaction counts and volumes
+- Price ranges and averages
+- ASCII charts of activity
+- Success/failure rates
+
+Example Report:
+```
+🔑 Accessing wallet: coldkey-01 with hotkey: hotkey-01 for local use only.
+Enter your password: 
+Decrypting...
+
+📊 Subnet Information (Detailed View)
+============================================================
+
+🌐 Network
+------------------------------------------------------------
+Netuid                   : 19
+Subnet                   : inference
+Symbol                   : t
+
+👤 Ownership
+------------------------------------------------------------
+Owner Hotkey             : 5CFJNoUYbd...
+Owner Coldkey            : 5CFJNoUYbd...
+Registered               : 2023-12-30 04:47:08 UTC
+
+⚙️ Status
+------------------------------------------------------------
+Is Dynamic               : True
+Tempo                    : 360
+Last Step                : 4958675
+Blocks Since Last Step   : 25
+
+📈 Market
+------------------------------------------------------------
+Subnet Volume (Alpha)    : t7,550.223801190
+Subnet Volume (Tao)      : τ793.161323920
+Emission                 : 4.11%
+Price (Tao)              : 0.10505
+Moving Price (Tao)       : 0.17677
+============================================================
+
+🔍 Finding optimal trade size...
+  • Testing 0.005000 TAO → 0.000000 slippage
+
+💫 Trade Parameters
+----------------------------------------
+Size                : 0.005000 TAO
+Slippage            : 0.000000 TAO
+Budget Left         : 0.010000 TAO
+----------------------------------------
+
+📈 Price below EMA - STAKING
+🧪 TEST MODE: Would have staked 0.005000 TAO
+
+💰 Wallet Status
+----------------------------------------
+Balance             : τ2.961664286τ
+Stake               : t72.911671858t
+----------------------------------------
+
+⏳ Waiting for next block...
+
+(repeats each block)
+```
+
 ### 🔄 Wallet Rotation Mode
 The script can operate in two modes:
 - Single wallet mode (traditional operation)
