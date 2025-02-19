@@ -25,11 +25,15 @@ pip install -r requirements.txt
 
 ## Usage
 ```bash
+cd $HOME/btt-subnet-dca
+source .venv/bin/activate
 python btt_subnet_dca.py <netuid> <wallet_name> <slippage_target> <max_tao_budget>
 ```
 
 ## Example
 This will run the script on the subnet with the wallet named `coldkey-01` with a slippage target of `0.0001τ` and a max tao budget of `5τ`. You will be prompted to enter your wallet password as per the native bittensor CLI.
 ```bash
+cd $HOME/btt-subnet-dca
+source .venv/bin/activate
 python3 btt_subnet_dca.py 19 coldkey-01 0.0001 5
 ```
