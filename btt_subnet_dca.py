@@ -92,6 +92,7 @@ SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $5
 TEST_MODE = args.test
 
 try:
+    print(f"🔑 Accessing wallet: {args.wallet} with hotkey: {args.hotkey} for local use only.")
     wallet = bt.wallet(name=args.wallet, hotkey=args.hotkey)
     wallet.unlock_coldkey()
 except Exception as e:
@@ -100,66 +101,83 @@ except Exception as e:
 
 async def chase_ema(netuid, wallet):
     remaining_budget = args.budget  # Initialize remaining budget
+    iteration_count = 0  # Track iterations
     
     async with bt.AsyncSubtensor('finney') as sub:
         while remaining_budget > 0:  # Continue only if we have budget left
             subnet_info = await sub.subnet(netuid)
             
-            print("\n📊 Subnet Information")
-            print("=" * 60)
-            
             alpha_price = float(subnet_info.price.tao)
             moving_price = float(subnet_info.moving_price) * 1e11
-
-            # Calculate price difference percentage from EMA
             price_diff_pct = abs(alpha_price - moving_price) / moving_price
 
             # Skip if price difference is less than minimum required
             if price_diff_pct < args.min_price_diff:
-                print(f"⏳ Price difference ({price_diff_pct:.2%}) < minimum required ({args.min_price_diff:.2%})")
+                print(f"\n⏳ Price difference ({price_diff_pct:.2%}) < minimum required ({args.min_price_diff:.2%})")
                 print("💤 Waiting for larger price movement...")
                 await sub.wait_for_block()
+                iteration_count += 1
                 continue
 
-            blocks_since_registration = subnet_info.last_step + subnet_info.blocks_since_last_step - subnet_info.network_registered_at
-            seconds_since_registration = blocks_since_registration * BLOCK_TIME_SECONDS
-            
-            current_time = datetime.now(timezone.utc)
-            registered_time = current_time - timedelta(seconds=seconds_since_registration)
-            registered_time_str = registered_time.strftime('%Y-%m-%d %H:%M:%S UTC')
+            # Show full details on first run, compact view afterwards
+            if iteration_count == 0:
+                print("\n📊 Subnet Information (Detailed View)")
+                print("=" * 60)
+                
+                blocks_since_registration = subnet_info.last_step + subnet_info.blocks_since_last_step - subnet_info.network_registered_at
+                seconds_since_registration = blocks_since_registration * BLOCK_TIME_SECONDS
+                current_time = datetime.now(timezone.utc)
+                registered_time = current_time - timedelta(seconds=seconds_since_registration)
+                registered_time_str = registered_time.strftime('%Y-%m-%d %H:%M:%S UTC')
 
-            info_dict = {
-                '🌐 Network': [
-                    ('Netuid', subnet_info.netuid),
-                    ('Subnet', subnet_info.subnet_name),
-                    ('Symbol', subnet_info.symbol)
-                ],
-                '👤 Ownership': [
-                    ('Owner Hotkey', subnet_info.owner_hotkey[:10] + "..."),
-                    ('Owner Coldkey', subnet_info.owner_coldkey[:10] + "..."),
-                    ('Registered', registered_time_str)
-                ],
-                '⚙️ Status': [
-                    ('Is Dynamic', subnet_info.is_dynamic),
-                    ('Tempo', subnet_info.tempo),
+                info_dict = {
+                    '🌐 Network': [
+                        ('Netuid', subnet_info.netuid),
+                        ('Subnet', subnet_info.subnet_name),
+                        ('Symbol', subnet_info.symbol)
+                    ],
+                    '👤 Ownership': [
+                        ('Owner Hotkey', subnet_info.owner_hotkey[:10] + "..."),
+                        ('Owner Coldkey', subnet_info.owner_coldkey[:10] + "..."),
+                        ('Registered', registered_time_str)
+                    ],
+                    '⚙️ Status': [
+                        ('Is Dynamic', subnet_info.is_dynamic),
+                        ('Tempo', subnet_info.tempo),
+                        ('Last Step', subnet_info.last_step),
+                        ('Blocks Since Last Step', subnet_info.blocks_since_last_step)
+                    ],
+                    '📈 Market': [
+                        ('Subnet Volume (Alpha)', str(subnet_info.subnet_volume)),
+                        ('Subnet Volume (Tao)', str(subnet_info.subnet_volume * alpha_price)),
+                        ('Emission', f"{float(subnet_info.tao_in_emission * 1e2):.2f}%"),
+                        ('Price (Tao)', f"{float(alpha_price):.5f}"),
+                        ('Moving Price (Tao)', f"{float(moving_price):.5f}")
+                    ]
+                }
+                
+                for section, items in info_dict.items():
+                    print(f"\n{section}")
+                    print("-" * 60)
+                    for key, value in items:
+                        print(f"{key:25}: {value}")
+                print("=" * 60)
+            else:
+                # Compact view for subsequent runs
+                print("\n📊 Status Update")
+                print("-" * 40)
+                compact_info = [
                     ('Last Step', subnet_info.last_step),
-                    ('Blocks Since Last Step', subnet_info.blocks_since_last_step)
-                ],
-                '📈 Market': [
-                    ('Subnet Volume (Alpha)', str(subnet_info.subnet_volume)),
-                    ('Subnet Volume (Tao)', str(subnet_info.subnet_volume * alpha_price)),
-                    ('Emission', f"{float(subnet_info.tao_in_emission * 1e2):.2f}%"),
-                    ('Price (Tao)', f"{float(alpha_price):.5f}"),
-                    ('Moving Price (Tao)', f"{float(moving_price):.5f}")
+                    ('Blocks Since Last Step', subnet_info.blocks_since_last_step),
+                    ('Volume (α)', f"{float(subnet_info.subnet_volume):.2f}"),
+                    ('Volume (τ)', f"{float(subnet_info.subnet_volume * alpha_price):.2f}"),
+                    ('Price (τ)', f"{float(alpha_price):.5f}"),
+                    ('EMA (τ)', f"{float(moving_price):.5f}"),
+                    ('Diff', f"{((alpha_price - moving_price) / moving_price):.2%}")
                 ]
-            }
-            
-            for section, items in info_dict.items():
-                print(f"\n{section}")
-                print("-" * 60)
-                for key, value in items:
-                    print(f"{key:25}: {value}")
-            print("=" * 60)
+                for key, value in compact_info:
+                    print(f"{key:20}: {value}")
+                print("-" * 40)
 
             # Binary search with remaining budget as max
             target_slippage = args.slippage  # in tao
@@ -188,11 +206,11 @@ async def chase_ema(netuid, wallet):
 
             increment = best_increment
             print(f"\n💫 Trade Parameters")
-            print("-" * 60)
-            print(f"{'Size':25}: {increment:.6f} TAO")
-            print(f"{'Slippage':25}: {float(subnet_info.slippage(increment)[1].tao):.6f} TAO")
-            print(f"{'Remaining Budget':25}: {remaining_budget:.6f} TAO")
-            print("-" * 60)
+            print("-" * 40)
+            print(f"{'Size':20}: {increment:.6f} TAO")
+            print(f"{'Slippage':20}: {float(subnet_info.slippage(increment)[1].tao):.6f} TAO")
+            print(f"{'Budget Left':20}: {remaining_budget:.6f} TAO")
+            print("-" * 40)
 
             if increment > remaining_budget:
                 print("❌ Insufficient remaining budget")
@@ -205,10 +223,10 @@ async def chase_ema(netuid, wallet):
                 if args.one_way_mode == 'stake':
                     print("⏭️  Price above EMA but stake-only mode active. Skipping...")
                     await sub.wait_for_block()
+                    iteration_count += 1
                     continue
                     
                 print("\n📉 Price above EMA - UNSTAKING")
-                print(f"Expected slippage for subnet {netuid}: {subnet_info.slippage(increment)[1].tao:.6f} TAO")
                 
                 if not TEST_MODE:
                     try:
@@ -227,10 +245,10 @@ async def chase_ema(netuid, wallet):
                 if args.one_way_mode == 'unstake':
                     print("⏭️  Price below EMA but unstake-only mode active. Skipping...")
                     await sub.wait_for_block()
+                    iteration_count += 1
                     continue
                     
                 print("\n📈 Price below EMA - STAKING")
-                print(f"Expected slippage for subnet {netuid}: {subnet_info.slippage(increment)[1].tao:.6f} TAO")
 
                 if not TEST_MODE:
                     try:
@@ -247,6 +265,7 @@ async def chase_ema(netuid, wallet):
 
             else:
                 print("🦄 Price equals EMA - No action needed")
+                iteration_count += 1
                 continue  # Don't decrement budget if no action taken
 
             current_stake = await sub.get_stake(
@@ -257,13 +276,14 @@ async def chase_ema(netuid, wallet):
 
             balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
             print(f"\n💰 Wallet Status")
-            print("-" * 60)
-            print(f"{'Balance':25}: {balance}τ")
-            print(f"{'Stake':25}: {current_stake}{subnet_info.symbol}")
-            print("-" * 60)
+            print("-" * 40)
+            print(f"{'Balance':20}: {balance}τ")
+            print(f"{'Stake':20}: {current_stake}{subnet_info.symbol}")
+            print("-" * 40)
 
             print("\n⏳ Waiting for next block...")
             await sub.wait_for_block()
+            iteration_count += 1
 
         print(f"\n✨ Budget exhausted. Total used: {args.budget - remaining_budget:.6f} TAO")
 
