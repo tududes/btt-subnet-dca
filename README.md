@@ -232,4 +232,4 @@ netuid 19 stake: t0.000000000t
 This script is provided as-is for educational purposes. Use it at your own risk.
 
 ### Support
-If you need help, please join the [Bittensor Discord](https://discord.gg/qasY3HA9F9) and ask politely for help understanding the concepts in this script.
+If you need help, please join the [Bittensor Discord](https://discord.gg/MhsTXDc5) and ask politely for help understanding the concepts in this script.
