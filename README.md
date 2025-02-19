@@ -349,8 +349,8 @@ Stake               : t72.911671858t
 
 ## 🔮 Further Improvements
 
-- 🔐 Add a more sophisticated wallet management system, perhaps skipping the password prompt
-- 📝 Add a more sophisticated logging system
+- 🔐 Update wallet management systemt to optionally skip the password prompt
+- 📝 Add a more robust logging system, perhaps to a sqlite database
 - 🔔 Webhooks to a Telegram channel or Discord server for live monitoring and alerts
 - ⚙️ Add configuration file support for persistent settings
 
