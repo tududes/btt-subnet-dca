@@ -127,7 +127,7 @@ netuid 19 stake: t0.000000000t
 ### Production Mode Example
 Run in production mode with real transactions:
 ```bash
-python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey default --slippage 0.0001 --budget 1
+python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1
 ```
 
 Results:
