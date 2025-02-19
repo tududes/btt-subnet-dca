@@ -10,11 +10,6 @@ It's strongly recommended to first run the bot in test mode to understand its be
 ### Supervision Required
 This script performs automatic trading operations with real TAO. Do not leave it running unattended unless you fully understand its behavior and intentionally choose to do so. Market conditions can change rapidly, and continuous supervision is recommended during initial usage.
 
-To run in test mode, simply add the --test flag to your command:
-```bash
-python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --slippage 0.0001 --budget 1 --test
-```
-
 ## Setup
 
 ### Install python 3.11
@@ -40,29 +35,33 @@ pip install -r requirements.txt
 cd $HOME/btt-subnet-dca
 source .venv/bin/activate
 
-python3 btt_subnet_dca.py --netuid <netuid> --wallet <wallet_name> --slippage <slippage_target> --budget <max_tao_budget> [--test]
+python3 btt_subnet_dca.py --help  # Show help message and available options
 ```
 
-### Arguments
-- `--netuid`: The subnet ID to operate on
+### Command Line Arguments
+
+#### Required Arguments:
+- `--netuid`: The subnet ID to operate on (e.g., 19 for inference subnet)
 - `--wallet`: The name of your wallet
-- `--slippage`: Target slippage in TAO (e.g., 0.0001τ)
-- `--budget`: Maximum TAO budget to use
-- `--test`: Optional flag to run in test mode without making actual transactions
+- `--hotkey`: The name of the hotkey to use
+- `--slippage`: Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes
+- `--budget`: Maximum TAO budget to use for trading operations
 
-## Example
-This will run the script on the subnet with the wallet named `coldkey-01` with a slippage target of `0.0001τ` and a max tao budget of `1τ`. You will be prompted to enter your wallet password as per the native bittensor CLI.
+#### Optional Arguments:
+- `--test`: Run in test mode without making actual transactions (recommended for first run)
+
+## Examples
+
+### Test Mode Example
+Run with test mode to simulate operations without making actual transactions:
 ```bash
-# Test mode example:
-python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --slippage 0.0001 --budget 1 --test
-
-# Production mode example:
-python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --slippage 0.0001 --budget 1
+python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --test
 ```
 
-### Example of a successful run in test mode
+### Production Mode Example
+Run in production mode with real transactions:
 ```bash
-python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --slippage 0.0001 --budget 0.25 --test
+python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey default --slippage 0.0001 --budget 1
 ```
 
 ## Further Improvements
@@ -70,6 +69,8 @@ python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --slippage 0.0001 --bu
 - Add a more sophisticated wallet management system, perhaps skipping the password prompt
 - Add a more sophisticated logging system
 - Webhooks to a Telegram channel or Discord server for live monitoring and alerts
+- Add configuration file support for persistent settings
+
 
 ## ⚠️ Final Notes
 
