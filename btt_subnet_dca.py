@@ -155,22 +155,25 @@ def initialize_wallets():
     print("\n🔐 Initializing wallets for rotation...")
     print("=" * 60)
     
-    for coldkey_name, hotkeys in wallet_groups.items():
+    # Get sorted list of coldkeys for sequential processing
+    coldkeys = sorted(wallet_groups.keys())
+    
+    for coldkey_name in coldkeys:
+        hotkeys = wallet_groups[coldkey_name]
         print(f"\n💼 Processing wallet: {coldkey_name} with {len(hotkeys)} hotkeys")
 
-        # Prompt the user for the password once per coldkey (hidden input)
+        # Prompt the user for the password once per coldkey
         try:
-            password = getpass.getpass(f"Enter password for {coldkey_name} (or press Enter to skip remaining wallets): ")
+            password = getpass.getpass(f"Enter password for {coldkey_name} (or press Enter to skip to next coldkey): ")
         except getpass.GetPassWarning:
-            # Fallback in case terminal doesn't support hidden input
-            password = input(f"Enter password for {coldkey_name} (or press Enter to skip remaining wallets): ")
+            password = input(f"Enter password for {coldkey_name} (or press Enter to skip to next coldkey): ")
         
-        # Check for blank password to stop processing remaining wallets
+        # Check for blank password to skip this coldkey
         if password.strip() == "":
-            print("⏩ Skipping remaining wallets...")
-            break
+            print(f"⏭️  Skipping coldkey: {coldkey_name}")
+            continue
         
-        # Try to unlock the coldkey once for this wallet group
+        # Try to unlock the coldkey
         try:
             # Create a temporary wallet just to test the password
             test_wallet = bt.wallet(name=coldkey_name, hotkey=hotkeys[0])
@@ -179,7 +182,6 @@ def initialize_wallets():
             print(f"✅ Successfully unlocked coldkey: {coldkey_name}")
             
             # Now use this password for all hotkeys of this coldkey
-            i = 0
             for hotkey in hotkeys:
                 try:
                     wallet = bt.wallet(name=coldkey_name, hotkey=hotkey)
@@ -192,7 +194,7 @@ def initialize_wallets():
                     
         except Exception as e:
             print(f"❌ Error unlocking coldkey {coldkey_name}: {e}")
-            response = input(f"Continue with next wallet? [Y/n]: ").lower()
+            response = input(f"Continue to next coldkey? [Y/n]: ").lower()
             if response not in ['y', 'yes', '']:
                 print("Aborting...")
                 sys.exit(1)

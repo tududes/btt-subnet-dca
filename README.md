@@ -115,6 +115,45 @@ The script can operate in two modes:
 
 In rotation mode, the script will:
 1. Scan your ~/.bittensor/wallets/ directory
+2. Process coldkeys sequentially in alphabetical order
+3. Prompt for each coldkey's password individually
+4. Allow skipping to next coldkey by pressing Enter
+5. Initialize all hotkeys for successfully unlocked coldkeys
+6. Continuously rotate through unlocked wallet/hotkey pairs
+
+Note: The script will:
+- Cache passwords securely in environment variables
+- Perform one stake/unstake operation per wallet before rotating
+- Allow skipping individual coldkeys during initialization
+- Continue to next coldkey when one is skipped
+- Show truncated wallet addresses during operations for tracking
+
+Example initialization flow:
+```
+🔐 Initializing wallets for rotation...
+============================================================
+
+💼 Processing wallet: coldkey-01 with 14 hotkeys
+Enter password for coldkey-01 (or press Enter to skip to next coldkey): 
+✅ Successfully unlocked coldkey: coldkey-01
+  ✓ Added hotkey: hotkey-01
+  ✓ Added hotkey: hotkey-02
+
+💼 Processing wallet: coldkey-02 with 14 hotkeys
+Enter password for coldkey-02 (or press Enter to skip to next coldkey): 
+⏭️  Skipping coldkey: coldkey-02
+
+💼 Processing wallet: coldkey-03 with 14 hotkeys
+...
+```
+
+### 🔄 Wallet Rotation Mode
+The script can operate in two modes:
+- Single wallet mode (traditional operation)
+- Wallet rotation mode (automatically cycles through multiple wallets)
+
+In rotation mode, the script will:
+1. Scan your ~/.bittensor/wallets/ directory
 2. Prompt for each wallet's password once
 3. Initialize all wallet/hotkey pairs
 4. Continuously rotate through unlocked wallets
