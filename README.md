@@ -2,6 +2,44 @@
 
 The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the price of TAO and buy TAO when the price is below the EMA and sell TAO when the price is above the EMA.
 
+## ⚠️ Important Considerations
+
+### Preventing Self-Competition
+When running multiple instances of this script, it's important to avoid having your instances compete against each other. Here are some strategies to prevent self-competition:
+
+1. **Price Zone Strategy**:
+   - Use the `--min-price-diff` flag to specify how far from the EMA the script should operate
+   - Example: Run one instance at 5% from EMA, another at 10% from EMA
+   - This creates non-overlapping price zones for each instance
+   ```bash
+   # Instance 1: Operates when price is 5-10% from EMA
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --min-price-diff 0.05 --slippage 0.0001 --budget 1
+
+   # Instance 2: Operates when price is 10-15% from EMA
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --min-price-diff 0.10 --slippage 0.0001 --budget 1
+   ```
+
+2. **One-Way Operation**:
+   - Use the `--one-way-mode` flag to restrict instances to either staking or unstaking
+   - This prevents instances from competing in opposite directions
+   ```bash
+   # Instance 1: Only stakes when below EMA
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --one-way-mode stake --slippage 0.0001 --budget 1
+
+   # Instance 2: Only unstakes when above EMA
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --slippage 0.0001 --budget 1
+   ```
+
+3. **Combined Strategy**:
+   - Combine price zones with one-way operation for maximum control
+   ```bash
+   # Instance 1: Stakes only, 5% below EMA
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --one-way-mode stake --min-price-diff 0.05 --slippage 0.0001 --budget 1
+
+   # Instance 2: Unstakes only, 5% above EMA
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --min-price-diff 0.05 --slippage 0.0001 --budget 1
+   ```
+
 ## How It Works
 
 ### EMA Trading Strategy
@@ -71,6 +109,8 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
 
 #### Optional Arguments:
 - `--test`: Run in test mode without making actual transactions (recommended for first run)
+- `--min-price-diff`: Minimum price difference from EMA to operate (e.g., 0.05 for 5% from EMA)
+- `--one-way-mode`: Restrict operations to only staking or only unstaking. Options: stake, unstake (default: both)
 
 ## Examples
 

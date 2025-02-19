@@ -14,7 +14,7 @@ This script will chase the EMA of the price of TAO and:
 - Sell TAO when the price is above the EMA
 
 Example usage:
-  python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey default --slippage 0.0001 --budget 1 --test
+  python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --min-price-diff 0.05 --test
 ''',
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
@@ -59,6 +59,17 @@ Example usage:
         action='store_true',
         help='Run in test mode without making actual transactions (recommended for first run)'
     )
+    optional.add_argument(
+        '--min-price-diff',
+        type=float,
+        default=0.0,
+        help='Minimum price difference from EMA to operate (e.g., 0.05 for 5%% from EMA)'
+    )
+    optional.add_argument(
+        '--one-way-mode',
+        choices=['stake', 'unstake'],
+        help='Restrict operations to only staking or only unstaking (default: both)'
+    )
     
     args = parser.parse_args()
     
@@ -98,6 +109,16 @@ async def chase_ema(netuid, wallet):
             
             alpha_price = float(subnet_info.price.tao)
             moving_price = float(subnet_info.moving_price) * 1e11
+
+            # Calculate price difference percentage from EMA
+            price_diff_pct = abs(alpha_price - moving_price) / moving_price
+
+            # Skip if price difference is less than minimum required
+            if price_diff_pct < args.min_price_diff:
+                print(f"Price difference ({price_diff_pct:.2%}) is less than minimum required ({args.min_price_diff:.2%})")
+                print("Waiting for larger price movement...")
+                await sub.wait_for_block()
+                continue
 
             blocks_since_registration = subnet_info.last_step + subnet_info.blocks_since_last_step - subnet_info.network_registered_at
             seconds_since_registration = blocks_since_registration * BLOCK_TIME_SECONDS
@@ -165,6 +186,11 @@ async def chase_ema(netuid, wallet):
             
 
             if alpha_price > moving_price:
+                if args.one_way_mode == 'stake':
+                    print("Price is above moving_price but one-way-mode is set to stake only. Skipping...")
+                    await sub.wait_for_block()
+                    continue
+                    
                 print("Price is above moving_price! SELL ALPHA TOKENS!")
                 # SELL ALPHA TOKENS!
 
@@ -184,6 +210,11 @@ async def chase_ema(netuid, wallet):
                 print (f'netuid {netuid} stake removed: increment {increment} @ price {alpha_price}')
 
             elif alpha_price < moving_price:
+                if args.one_way_mode == 'unstake':
+                    print("Price is below moving_price but one-way-mode is set to unstake only. Skipping...")
+                    await sub.wait_for_block()
+                    continue
+                    
                 print("Price is below moving_price! STAKE TAO TO SUBNET!")
                 # STAKE TAO TO SUBNET!
 
@@ -203,7 +234,7 @@ async def chase_ema(netuid, wallet):
                 print (f'netuid {netuid} stake added: increment {increment} @ price {alpha_price}')
 
             else:
-                print("Price is equal to moving_price! DO NOTHING!")
+                print("Price is equal to moving_price! DO NOTHING! Unicorn walks by...")
                 continue  # Don't decrement budget if no action taken
 
             current_stake = await sub.get_stake(
