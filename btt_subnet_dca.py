@@ -105,8 +105,8 @@ async def chase_ema(netuid, wallet):
         while remaining_budget > 0:  # Continue only if we have budget left
             subnet_info = await sub.subnet(netuid)
             
-            print("\nSubnet Information:")
-            print("-" * 50)
+            print("\n📊 Subnet Information")
+            print("=" * 60)
             
             alpha_price = float(subnet_info.price.tao)
             moving_price = float(subnet_info.moving_price) * 1e11
@@ -116,8 +116,8 @@ async def chase_ema(netuid, wallet):
 
             # Skip if price difference is less than minimum required
             if price_diff_pct < args.min_price_diff:
-                print(f"Price difference ({price_diff_pct:.2%}) is less than minimum required ({args.min_price_diff:.2%})")
-                print("Waiting for larger price movement...")
+                print(f"⏳ Price difference ({price_diff_pct:.2%}) < minimum required ({args.min_price_diff:.2%})")
+                print("💤 Waiting for larger price movement...")
                 await sub.wait_for_block()
                 continue
 
@@ -129,26 +129,37 @@ async def chase_ema(netuid, wallet):
             registered_time_str = registered_time.strftime('%Y-%m-%d %H:%M:%S UTC')
 
             info_dict = {
-                'netuid': subnet_info.netuid,
-                'Subnet': subnet_info.subnet_name,
-                'Symbol': subnet_info.symbol,
-                'Owner Hotkey': subnet_info.owner_hotkey[:10] + "...",
-                'Owner Coldkey': subnet_info.owner_coldkey[:10] + "...",
-                'Registered': registered_time_str,
-                'Is Dynamic': subnet_info.is_dynamic,
-                'Tempo': subnet_info.tempo,
-                'Last Step': subnet_info.last_step,
-                'Blocks Since Last Step': subnet_info.blocks_since_last_step,
-                'Subnet Volume (Alpha)': str(subnet_info.subnet_volume),
-                'Subnet Volume (Tao)': str(subnet_info.subnet_volume * alpha_price),
-                'Emission': f"{float(subnet_info.tao_in_emission * 1e2):.2f}%",
-                'Price (Tao)': f"{float(alpha_price):.5f}",
-                'Moving Price (Tao)': f"{float(moving_price):.5f}",
+                '🌐 Network': [
+                    ('Netuid', subnet_info.netuid),
+                    ('Subnet', subnet_info.subnet_name),
+                    ('Symbol', subnet_info.symbol)
+                ],
+                '👤 Ownership': [
+                    ('Owner Hotkey', subnet_info.owner_hotkey[:10] + "..."),
+                    ('Owner Coldkey', subnet_info.owner_coldkey[:10] + "..."),
+                    ('Registered', registered_time_str)
+                ],
+                '⚙️ Status': [
+                    ('Is Dynamic', subnet_info.is_dynamic),
+                    ('Tempo', subnet_info.tempo),
+                    ('Last Step', subnet_info.last_step),
+                    ('Blocks Since Last Step', subnet_info.blocks_since_last_step)
+                ],
+                '📈 Market': [
+                    ('Subnet Volume (Alpha)', str(subnet_info.subnet_volume)),
+                    ('Subnet Volume (Tao)', str(subnet_info.subnet_volume * alpha_price)),
+                    ('Emission', f"{float(subnet_info.tao_in_emission * 1e2):.2f}%"),
+                    ('Price (Tao)', f"{float(alpha_price):.5f}"),
+                    ('Moving Price (Tao)', f"{float(moving_price):.5f}")
+                ]
             }
             
-            for key, value in info_dict.items():
-                print(f"{key:25}: {value}")
-            print("-" * 50)
+            for section, items in info_dict.items():
+                print(f"\n{section}")
+                print("-" * 60)
+                for key, value in items:
+                    print(f"{key:25}: {value}")
+            print("=" * 60)
 
             # Binary search with remaining budget as max
             target_slippage = args.slippage  # in tao
@@ -157,11 +168,12 @@ async def chase_ema(netuid, wallet):
             best_increment = 0.0
             closest_slippage = float('inf')
             
+            print("\n🔍 Finding optimal trade size...")
             while (max_increment - min_increment) > 1e-6:
                 current_increment = (min_increment + max_increment) / 2
                 slippage_tuple = subnet_info.slippage(current_increment)
                 slippage = float(slippage_tuple[1].tao)
-                print(f"DEBUG - increment: {current_increment:.6f}, slippage: {slippage:.6f}, raw: {slippage_tuple}")
+                print(f"  • Testing {current_increment:.6f} TAO → {slippage:.6f} slippage")
                 
                 if abs(slippage - target_slippage) < abs(closest_slippage - target_slippage):
                     closest_slippage = slippage
@@ -175,27 +187,29 @@ async def chase_ema(netuid, wallet):
                     max_increment = current_increment
 
             increment = best_increment
-            print(f"Final increment: {increment:.6f} (slippage: {float(subnet_info.slippage(increment)[1].tao):.6f})")
-            print(f"Remaining budget: {remaining_budget:.6f}")
+            print(f"\n💫 Trade Parameters")
+            print("-" * 60)
+            print(f"{'Size':25}: {increment:.6f} TAO")
+            print(f"{'Slippage':25}: {float(subnet_info.slippage(increment)[1].tao):.6f} TAO")
+            print(f"{'Remaining Budget':25}: {remaining_budget:.6f} TAO")
+            print("-" * 60)
 
             if increment > remaining_budget:
-                print("Insufficient remaining budget")
+                print("❌ Insufficient remaining budget")
                 break
 
             # Decrement budget by the amount used
             remaining_budget -= abs(increment)
-            
 
             if alpha_price > moving_price:
                 if args.one_way_mode == 'stake':
-                    print("Price is above moving_price but one-way-mode is set to stake only. Skipping...")
+                    print("⏭️  Price above EMA but stake-only mode active. Skipping...")
                     await sub.wait_for_block()
                     continue
                     
-                print("Price is above moving_price! SELL ALPHA TOKENS!")
-                # SELL ALPHA TOKENS!
-
-                print(f"slippage for subnet {netuid}", subnet_info.slippage(increment))
+                print("\n📉 Price above EMA - UNSTAKING")
+                print(f"Expected slippage for subnet {netuid}: {subnet_info.slippage(increment)[1].tao:.6f} TAO")
+                
                 if not TEST_MODE:
                     try:
                         await sub.unstake( 
@@ -203,23 +217,21 @@ async def chase_ema(netuid, wallet):
                             netuid = netuid,
                             amount = bt.Balance.from_tao(increment), 
                         )
+                        print(f"✅ Successfully unstaked {increment:.6f} TAO @ {alpha_price:.6f}")
                     except Exception as e:
-                        print(f"Error unstaking: {e}")
+                        print(f"❌ Error unstaking: {e}")
                 else:
-                    print(f"TEST MODE: Would have unstaked {increment} TAO")
-                    
-                print (f'netuid {netuid} stake removed: increment {increment} @ price {alpha_price}')
+                    print(f"🧪 TEST MODE: Would have unstaked {increment:.6f} TAO")
 
             elif alpha_price < moving_price:
                 if args.one_way_mode == 'unstake':
-                    print("Price is below moving_price but one-way-mode is set to unstake only. Skipping...")
+                    print("⏭️  Price below EMA but unstake-only mode active. Skipping...")
                     await sub.wait_for_block()
                     continue
                     
-                print("Price is below moving_price! STAKE TAO TO SUBNET!")
-                # STAKE TAO TO SUBNET!
+                print("\n📈 Price below EMA - STAKING")
+                print(f"Expected slippage for subnet {netuid}: {subnet_info.slippage(increment)[1].tao:.6f} TAO")
 
-                print(f"slippage for subnet {netuid}", subnet_info.slippage(increment))
                 if not TEST_MODE:
                     try:
                         await sub.add_stake( 
@@ -227,15 +239,14 @@ async def chase_ema(netuid, wallet):
                             netuid = netuid,
                             amount = bt.Balance.from_tao(increment), 
                         )
+                        print(f"✅ Successfully staked {increment:.6f} TAO @ {alpha_price:.6f}")
                     except Exception as e:
-                        print(f"Error staking: {e}")
+                        print(f"❌ Error staking: {e}")
                 else:
-                    print(f"TEST MODE: Would have staked {increment} TAO")
-
-                print (f'netuid {netuid} stake added: increment {increment} @ price {alpha_price}')
+                    print(f"🧪 TEST MODE: Would have staked {increment:.6f} TAO")
 
             else:
-                print("Price is equal to moving_price! DO NOTHING! Unicorn walks by...")
+                print("🦄 Price equals EMA - No action needed")
                 continue  # Don't decrement budget if no action taken
 
             current_stake = await sub.get_stake(
@@ -245,13 +256,16 @@ async def chase_ema(netuid, wallet):
             )
 
             balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
-            print(f'wallet balance: {balance}τ')
-            print(f'netuid {netuid} stake: {current_stake}{subnet_info.symbol}')
+            print(f"\n💰 Wallet Status")
+            print("-" * 60)
+            print(f"{'Balance':25}: {balance}τ")
+            print(f"{'Stake':25}: {current_stake}{subnet_info.symbol}")
+            print("-" * 60)
 
-            # wait for block before next iteration
+            print("\n⏳ Waiting for next block...")
             await sub.wait_for_block()
 
-        print(f"Budget exhausted. Total used: {args.budget - remaining_budget:.6f}")
+        print(f"\n✨ Budget exhausted. Total used: {args.budget - remaining_budget:.6f} TAO")
 
 async def main():
     # continue loop perpetually
