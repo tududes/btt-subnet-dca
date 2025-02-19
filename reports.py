@@ -1,6 +1,8 @@
 from database import SubnetDCADatabase
 from datetime import datetime, timedelta
 import statistics
+import argparse
+import sys
 
 class SubnetDCAReports:
     def __init__(self, db: SubnetDCADatabase):
@@ -87,4 +89,86 @@ class SubnetDCAReports:
             print(f"{'Total Unstaked':25} | {stats[2]:20.6f} | τ")
             print(f"{'Net Position':25} | {stats[1] - stats[2]:20.6f} | τ")
             print(f"{'Average Price':25} | {stats[5]:20.6f} | τ")
-            print(f"{'Average Price Diff':25} | {stats[6]*100:19.2f}% | from EMA") 
+            print(f"{'Average Price Diff':25} | {stats[6]*100:19.2f}% | from EMA")
+
+    def get_all_wallets(self):
+        """Get list of all wallets in database"""
+        query = '''
+            SELECT DISTINCT coldkey 
+            FROM wallets 
+            ORDER BY first_seen
+        '''
+        cursor = self.db.conn.execute(query)
+        return [row[0] for row in cursor.fetchall()]
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(
+        description='''
+📊 Subnet DCA Report CLI
+View statistics and reports from your running DCA bot.
+
+Examples:
+  python3 reports.py --summary
+  python3 reports.py --wallet 5CnFd... --period 24h
+  python3 reports.py --all-wallets
+''',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    
+    parser.add_argument(
+        '--summary',
+        action='store_true',
+        help='Show overall activity summary'
+    )
+    parser.add_argument(
+        '--wallet',
+        type=str,
+        help='Show statistics for specific wallet (provide coldkey address)'
+    )
+    parser.add_argument(
+        '--period',
+        choices=['6h', '12h', '24h', '48h', '72h', '7d', '30d', 'all'],
+        default='24h',
+        help='Time period for statistics'
+    )
+    parser.add_argument(
+        '--all-wallets',
+        action='store_true',
+        help='Show statistics for all wallets'
+    )
+    
+    args = parser.parse_args()
+    
+    if not any([args.summary, args.wallet, args.all_wallets]):
+        parser.print_help()
+        sys.exit(1)
+        
+    return args
+
+def main():
+    args = parse_arguments()
+    
+    try:
+        db = SubnetDCADatabase()
+        reports = SubnetDCAReports(db)
+        
+        if args.summary:
+            reports.print_summary()
+            
+        if args.wallet:
+            reports.print_wallet_summary(args.wallet)
+            
+        if args.all_wallets:
+            wallets = reports.get_all_wallets()
+            for wallet in wallets:
+                reports.print_wallet_summary(wallet)
+                print("\n" + "=" * 80)  # Separator between wallets
+                
+    except Exception as e:
+        print(f"❌ Error accessing database: {e}")
+        sys.exit(1)
+    finally:
+        db.close()
+
+if __name__ == "__main__":
+    main() 

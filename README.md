@@ -460,11 +460,45 @@ Note: When using --budget 0 in rotation mode:
 - For staking: Uses full available TAO balance
 - For unstaking: Uses full available stake converted to TAO
 
+### 📊 Viewing Reports
+You can view reports while the bot is running by using reports.py directly:
+
+```bash
+# Show overall activity summary
+python3 reports.py --summary
+
+# Show statistics for specific wallet
+python3 reports.py --wallet 5CnFd... --period 24h
+
+# Show statistics for all wallets
+python3 reports.py --all-wallets
+```
+
+#### Report Options:
+- `--summary`: Show overall activity summary for all time segments
+- `--wallet`: Show statistics for specific wallet (provide coldkey address)
+- `--period`: Time period for statistics (6h, 12h, 24h, 48h, 72h, 7d, 30d, all)
+- `--all-wallets`: Show statistics for all wallets
+
+The reports module can also be imported and used programmatically:
+```python
+from database import SubnetDCADatabase
+from reports import SubnetDCAReports
+
+db = SubnetDCADatabase()
+reports = SubnetDCAReports(db)
+
+# Print activity summary
+reports.print_summary()
+
+# Print wallet statistics
+reports.print_wallet_summary("5CnFd...")
+```
 
 ## 🔮 Further Improvements
 
 - 🔐 Update wallet management systemt to optionally skip the password prompt
-- 📝 Add a more robust logging system, perhaps to a sqlite database
+- 📊 Add graphical visualizations for historical data
 - 🔔 Webhooks to a Telegram channel or Discord server for live monitoring and alerts
 - ⚙️ Add configuration file support for persistent settings
 

@@ -375,7 +375,7 @@ async def chase_ema(netuid, wallet):
                     await sub.wait_for_block()
                     continue
                     
-                print("\n📉 Price above EMA - UNSTAKING")
+                print(f"\n📉 Price above EMA - UNSTAKING cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
                 
                 # Convert alpha amount to TAO equivalent including slippage
                 alpha_amount = increment / alpha_price  # Convert TAO to alpha
@@ -435,7 +435,7 @@ async def chase_ema(netuid, wallet):
                     await sub.wait_for_block()
                     continue
                     
-                print("\n📈 Price below EMA - STAKING")
+                print(f"\n📈 Price below EMA - STAKING cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
 
                 # Only check against budget if we're using it
                 if args.budget > 0 and increment > remaining_budget:
