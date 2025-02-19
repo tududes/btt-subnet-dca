@@ -15,6 +15,11 @@ This strategy aims to accumulate more TAO over time by consistently buying low a
 ### ⚡ Slippage Auto-Tuning
 The script uses a binary search algorithm to automatically find the optimal trade size that matches your target slippage:
 1. For each trade, it starts with your remaining budget as the maximum possible trade size
+
+When using `--budget 0`, the script will:
+- For staking: Use the full available TAO balance on the coldkey
+- For unstaking: Use the full available subnet alpha balance staked to the hotkey (converted to TAO)
+
 2. It then performs a binary search to find the largest trade size that stays within your slippage target
 3. If the calculated slippage would be too high, it reduces the trade size
 4. If the calculated slippage would be too low, it increases the trade size
@@ -24,6 +29,26 @@ This auto-tuning ensures that:
 - Large trades are broken into smaller pieces to minimize price impact
 - Each trade maintains your desired slippage target
 - The script adapts to changing market conditions automatically
+
+### 🔄 Wallet Rotation Mode
+The script can operate in two modes:
+- Single wallet mode (traditional operation)
+- Wallet rotation mode (automatically cycles through multiple wallets)
+
+In rotation mode, the script will:
+1. Scan your ~/.bittensor/wallets/ directory
+2. Prompt for each wallet's password once
+3. Initialize all wallet/hotkey pairs
+4. Continuously rotate through unlocked wallets
+5. Allow skipping remaining wallets by pressing Enter
+6. Execute one operation per wallet before moving to next
+7. Process up to two hotkeys per coldkey
+
+Note: The script will:
+- Cache passwords securely in environment variables
+- Perform one stake/unstake operation per wallet before rotating
+- Skip remaining wallets if a blank password is entered
+- Show truncated wallet addresses during operations for tracking
 
 
 ## ⚠️ Important Warnings
@@ -53,7 +78,7 @@ When running multiple instances of this script, it's important to avoid having y
    ```
 
 2. **↕️ One-Way Operation**:
-   - Use the `--one-way-mode` flag to restrict instances to either staking or unstaking
+   - Use the `--one-way-mode` flag to restrict instances to either staking or only unstaking
    - This prevents instances from competing in opposite directions
    ```bash
    # Instance 1: Only stakes when below EMA
@@ -109,12 +134,13 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
 - `--wallet`: The name of your wallet
 - `--hotkey`: The name of the hotkey to use
 - `--slippage`: Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes
-- `--budget`: Maximum TAO budget to use for trading operations
+- `--budget`: Maximum TAO budget to use for trading operations (use 0 to use full available balance/stake)
 
 #### 🔧 Optional Arguments:
 - `--min-price-diff`: Minimum price difference from EMA to operate (e.g., 0.05 for 5% from EMA)
 - `--one-way-mode`: Restrict operations to only staking or only unstaking. Options: stake, unstake (default: both)
 - `--test`: Run in test mode without making actual transactions (recommended for first run)
+- `--rotate-all-wallets`: Enable wallet rotation mode (cycles through all available wallets)
 
 ## 📋 Examples
 
@@ -345,6 +371,16 @@ Stake               : t72.911671858t
 
 ⏳ Waiting for next block...
 ```
+
+### 🔄 Wallet Rotation Example
+Run with wallet rotation to cycle through all available wallets:
+```bash
+python3 btt_subnet_dca.py --rotate-all-wallets --netuid 19 --slippage 0.0001 --budget 0 --test
+```
+
+Note: When using --budget 0 in rotation mode:
+- For staking: Uses full available TAO balance
+- For unstaking: Uses full available stake converted to TAO
 
 
 ## 🔮 Further Improvements
