@@ -58,16 +58,26 @@ class SubnetDCADatabase:
     def get_or_create_wallet(self, coldkey: str, hotkey: str) -> int:
         """Get wallet ID or create if not exists"""
         with self.conn:
+            # First try to get existing wallet
             cursor = self.conn.execute(
-                'INSERT OR IGNORE INTO wallets (coldkey, hotkey) VALUES (?, ?)',
+                'SELECT id FROM wallets WHERE coldkey = ? AND hotkey = ?',
                 (coldkey, hotkey)
             )
-            if cursor.rowcount == 0:
-                cursor = self.conn.execute(
-                    'SELECT id FROM wallets WHERE coldkey = ? AND hotkey = ?',
-                    (coldkey, hotkey)
-                )
-            return cursor.fetchone()[0]
+            result = cursor.fetchone()
+            
+            if result:
+                return result[0]
+            
+            # If not found, create new wallet and return its ID
+            cursor = self.conn.execute(
+                'INSERT INTO wallets (coldkey, hotkey) VALUES (?, ?)',
+                (coldkey, hotkey)
+            )
+            self.conn.commit()  # Make sure the insert is committed
+            return cursor.lastrowid
+
+        # If we somehow got here without a valid ID, raise an error
+        raise Exception(f"Failed to get or create wallet for {coldkey[:10]}... / {hotkey[:10]}...")
 
     def log_transaction(self, coldkey: str, hotkey: str, operation: str, 
                        amount_tao: float, amount_alpha: float, price_tao: float,
