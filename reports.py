@@ -77,19 +77,26 @@ class SubnetDCAReports:
         
         for period in periods:
             stats = self.db.get_wallet_stats(coldkey, period)
-            if not stats:
+            if not stats or stats[0] == 0:  # No transactions or all values are NULL
+                print(f"\n📅 Period: {period}")
+                print("-" * 80)
+                print(f"{'Metric':25} | {'Value':20} | {'Details'}")
+                print("-" * 80)
+                print(f"{'No transactions found in this period':^78}")
                 continue
                 
             print(f"\n📅 Period: {period}")
             print("-" * 80)
             print(f"{'Metric':25} | {'Value':20} | {'Details'}")
             print("-" * 80)
-            print(f"{'Total Transactions':25} | {stats[0]:20.0f} | {stats[7]} successful, {stats[8]} failed")
-            print(f"{'Total Staked':25} | {stats[1]:20.6f} | τ")
-            print(f"{'Total Unstaked':25} | {stats[2]:20.6f} | τ")
-            print(f"{'Net Position':25} | {stats[1] - stats[2]:20.6f} | τ")
-            print(f"{'Average Price':25} | {stats[5]:20.6f} | τ")
-            print(f"{'Average Price Diff':25} | {stats[6]*100:19.2f}% | from EMA")
+            print(f"{'Total Transactions':25} | {stats[0]:20.0f} | {stats[7] or 0} successful, {stats[8] or 0} failed")
+            print(f"{'Total Staked':25} | {stats[1] or 0:20.6f} | τ")
+            print(f"{'Total Unstaked':25} | {stats[2] or 0:20.6f} | τ")
+            print(f"{'Net Position':25} | {(stats[1] or 0) - (stats[2] or 0):20.6f} | τ")
+            if stats[5]:  # If we have price data
+                print(f"{'Average Price':25} | {stats[5]:20.6f} | τ")
+            if stats[6]:  # If we have price diff data
+                print(f"{'Average Price Diff':25} | {stats[6]*100:19.2f}% | from EMA")
 
     def get_all_wallets(self):
         """Get list of all wallets in database"""
