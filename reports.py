@@ -1,4 +1,4 @@
-from database import SubnetDCADatabase
+from utils.database import SubnetDCADatabase
 from datetime import datetime, timedelta
 import statistics
 import argparse

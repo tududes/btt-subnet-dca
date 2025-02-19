@@ -4,8 +4,9 @@ import os
 import argparse
 from datetime import datetime, timedelta, timezone
 import getpass  # Add this import at the top
-from database import SubnetDCADatabase
+from utils.database import SubnetDCADatabase
 from reports import SubnetDCAReports
+from utils.password_manager import WalletPasswordManager
 
 # Constants
 SUBTENSOR = 'finney' # or use a local subtensor via ws://127.0.0.1:9944
@@ -151,6 +152,7 @@ def initialize_wallets():
         sys.exit(1)
 
     unlocked_wallets = []
+    pw_manager = WalletPasswordManager()
     
     print("\n🔐 Initializing wallets for rotation...")
     print("=" * 60)
@@ -162,14 +164,11 @@ def initialize_wallets():
         hotkeys = wallet_groups[coldkey_name]
         print(f"\n💼 Processing wallet: {coldkey_name} with {len(hotkeys)} hotkeys")
 
-        # Prompt the user for the password once per coldkey
-        try:
-            password = getpass.getpass(f"Enter password for {coldkey_name} (or press Enter to skip to next coldkey): ")
-        except getpass.GetPassWarning:
-            password = input(f"Enter password for {coldkey_name} (or press Enter to skip to next coldkey): ")
+        # Get password from .env or prompt user
+        password = pw_manager.get_password(coldkey_name)
         
         # Check for blank password to skip this coldkey
-        if password.strip() == "":
+        if not password:
             print(f"⏭️  Skipping coldkey: {coldkey_name}")
             continue
         
@@ -194,6 +193,7 @@ def initialize_wallets():
                     
         except Exception as e:
             print(f"❌ Error unlocking coldkey {coldkey_name}: {e}")
+            pw_manager.clear_password(coldkey_name)  # Clear invalid password
             response = input(f"Continue to next coldkey? [Y/n]: ").lower()
             if response not in ['y', 'yes', '']:
                 print("Aborting...")
