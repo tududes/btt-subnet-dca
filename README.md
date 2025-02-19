@@ -1,6 +1,6 @@
 # 🤖 Bittensor Subnet DCA (dTAO)
 
-The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the price of TAO and stake TAO into Alpha when the price is below the EMA and unstake Alpha into TAO when the price is above the EMA.
+The purpose of this script is educational. It demonstrates how to use the bittensor library to create a simple DCA (dTAO) bot for the Bittensor network. The script will chase the EMA of the Subnet token Alpha price and stake TAO into Alpha when the price is below the EMA and unstake Alpha into TAO when the price is above the EMA.
 
 
 ## 🔍 How It Works
@@ -10,7 +10,7 @@ The script implements a simple trading strategy based on the Exponential Moving 
 - When the current price is **below** the EMA: The script will **stake TAO** to the subnet, effectively "buying" at a lower price
 - When the current price is **above** the EMA: The script will **unstake TAO** from the subnet, effectively "selling" at a higher price
 
-This strategy aims to accumulate more TAO over time by consistently buying low and selling high relative to the moving average.
+This strategy aims to target an Alpha price along the EMA and accumulate more TAO over time by consistently staking low and unstaking high relative to the Subnet moving average.
 
 ### ⚡ Slippage Auto-Tuning
 The script uses a binary search algorithm to automatically find the optimal trade size that matches your target slippage:
