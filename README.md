@@ -126,161 +126,224 @@ python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --s
 
 Results:
 ```
+🔑 Accessing wallet: coldkey-01 with hotkey: hotkey-01 for local use only.
 Enter your password: 
 Decrypting...
 
-Subnet Information:
---------------------------------------------------
-netuid                   : 19
-Subnet                   : inference
-Symbol                   : t
-Owner Hotkey             : 5CFJNoUYbd...
-Owner Coldkey            : 5CFJNoUYbd...
-Registered               : 2023-12-30 04:47:06 UTC
-Is Dynamic               : True
-Tempo                    : 360
-Last Step                : 4958314
-Blocks Since Last Step   : 87
-Subnet Volume (Alpha)    : t7,505.975722193
-Subnet Volume (Tao)      : τ775.657893458
-Emission                 : 4.11%
-Price (Tao)              : 0.10334
-Moving Price (Tao)       : 0.17474
---------------------------------------------------
-DEBUG - increment: 0.500000, slippage: 0.001346, raw: (t4.837111367, t0.001346272)
-DEBUG - increment: 0.250000, slippage: 0.000337, raw: (t2.418892196, t0.000336624)
-DEBUG - increment: 0.125000, slippage: 0.000084, raw: (t1.209530244, t0.000084165)
-Final increment: 0.125000 (slippage: 0.000084)
-Remaining budget: 1.000000
-Price is below moving_price! STAKE TAO TO SUBNET!
-slippage for subnet 19 (t1.209530244, t0.000084165)
-TEST MODE: Would have staked 0.125 TAO
-netuid 19 stake added: increment 0.125 @ price 0.103338716
-wallet balance: τ2.971039286τ
-netuid 19 stake: t0.000000000t
+📊 Subnet Information (Detailed View)
+============================================================
 
-Subnet Information:
---------------------------------------------------
-netuid                   : 19
+🌐 Network
+------------------------------------------------------------
+Netuid                   : 19
 Subnet                   : inference
 Symbol                   : t
+
+👤 Ownership
+------------------------------------------------------------
 Owner Hotkey             : 5CFJNoUYbd...
 Owner Coldkey            : 5CFJNoUYbd...
-Registered               : 2023-12-30 04:47:00 UTC
+Registered               : 2023-12-30 04:47:08 UTC
+
+⚙️ Status
+------------------------------------------------------------
 Is Dynamic               : True
 Tempo                    : 360
-Last Step                : 4958314
-Blocks Since Last Step   : 88
-Subnet Volume (Alpha)    : t7,506.025800985
-Subnet Volume (Tao)      : τ775.637030133
+Last Step                : 4958675
+Blocks Since Last Step   : 25
+
+📈 Market
+------------------------------------------------------------
+Subnet Volume (Alpha)    : t7,550.223801190
+Subnet Volume (Tao)      : τ793.161323920
 Emission                 : 4.11%
-Price (Tao)              : 0.10334
-Moving Price (Tao)       : 0.17475
---------------------------------------------------
-DEBUG - increment: 0.437500, slippage: 0.001031, raw: (t4.232761746, t0.001030813)
-DEBUG - increment: 0.218750, slippage: 0.000258, raw: (t2.116638536, t0.000257744)
-DEBUG - increment: 0.109375, slippage: 0.000064, raw: (t1.058383696, t0.000064444)
-Final increment: 0.109375 (slippage: 0.000064)
-Remaining budget: 0.875000
-Price is below moving_price! STAKE TAO TO SUBNET!
-slippage for subnet 19 (t1.058383696, t0.000064444)
-TEST MODE: Would have staked 0.109375 TAO
-netuid 19 stake added: increment 0.109375 @ price 0.103335247
-wallet balance: τ2.971039286τ
-netuid 19 stake: t0.000000000t
+Price (Tao)              : 0.10505
+Moving Price (Tao)       : 0.17677
+============================================================
+
+🔍 Finding optimal trade size...
+  • Testing 0.005000 TAO → 0.000000 slippage
+
+💫 Trade Parameters
+----------------------------------------
+Size                : 0.005000 TAO
+Slippage            : 0.000000 TAO
+Budget Left         : 0.010000 TAO
+----------------------------------------
+
+📈 Price below EMA - STAKING
+🧪 TEST MODE: Would have staked 0.005000 TAO
+
+💰 Wallet Status
+----------------------------------------
+Balance             : τ2.961664286τ
+Stake               : t72.911671858t
+----------------------------------------
+
+⏳ Waiting for next block...
+
+(repeats each block)
 ```
 
 ### 🚀 Production Mode Example
 Run in production mode with real transactions:
 ```bash
-python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1
+python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.000001 --budget 0.01
 ```
 
 Results:
 ```
+🔑 Accessing wallet: coldkey-01 with hotkey: hotkey-01 for local use only.
 Enter your password: 
 Decrypting...
 
-Subnet Information:
---------------------------------------------------
-netuid                   : 19
-Subnet                   : inference
-Symbol                   : t
-Owner Hotkey             : 5CFJNoUYbd...
-Owner Coldkey            : 5CFJNoUYbd...
-Registered               : 2023-12-30 04:47:06 UTC
-Is Dynamic               : True
-Tempo                    : 360
-Last Step                : 4958314
-Blocks Since Last Step   : 52
-Subnet Volume (Alpha)    : t7,503.693284840
-Subnet Volume (Tao)      : τ777.063492234
-Emission                 : 4.11%
-Price (Tao)              : 0.10356
-Moving Price (Tao)       : 0.17451
---------------------------------------------------
-DEBUG - increment: 0.005000, slippage: 0.000000, raw: (t0.048282235, t0.000000133)
-Final increment: 0.005000 (slippage: 0.000000)
-Remaining budget: 0.010000
-Price is below moving_price! STAKE TAO TO SUBNET!
-slippage for subnet 19 (t0.048282235, t0.000000133)
-netuid 19 stake added: increment 0.005 @ price 0.10355747
-wallet balance: τ2.975414286τ
-netuid 19 stake: t0.000000000t
+📊 Subnet Information (Detailed View)
+============================================================
 
-Subnet Information:
---------------------------------------------------
-netuid                   : 19
+🌐 Network
+------------------------------------------------------------
+Netuid                   : 19
 Subnet                   : inference
 Symbol                   : t
-Owner Hotkey             : 5CFJNoUYbd...
-Owner Coldkey            : 5CFJNoUYbd...
-Registered               : 2023-12-30 04:47:00 UTC
-Is Dynamic               : True
-Tempo                    : 360
-Last Step                : 4958314
-Blocks Since Last Step   : 54
-Subnet Volume (Alpha)    : t7,503.830742892
-Subnet Volume (Tao)      : τ776.967458249
-Emission                 : 4.11%
-Price (Tao)              : 0.10354
-Moving Price (Tao)       : 0.17452
---------------------------------------------------
-DEBUG - increment: 0.002500, slippage: 0.000000, raw: (t0.024144578, t0.000000032)
-Final increment: 0.002500 (slippage: 0.000000)
-Remaining budget: 0.005000
-Price is below moving_price! STAKE TAO TO SUBNET!
-slippage for subnet 19 (t0.024144578, t0.000000032)
-netuid 19 stake added: increment 0.0025 @ price 0.103542775
-wallet balance: τ2.972914286τ
-netuid 19 stake: t0.000000000t
 
-Subnet Information:
---------------------------------------------------
-netuid                   : 19
-Subnet                   : inference
-Symbol                   : t
+👤 Ownership
+------------------------------------------------------------
 Owner Hotkey             : 5CFJNoUYbd...
 Owner Coldkey            : 5CFJNoUYbd...
-Registered               : 2023-12-30 04:47:00 UTC
+Registered               : 2023-12-30 04:47:04 UTC
+
+⚙️ Status
+------------------------------------------------------------
 Is Dynamic               : True
 Tempo                    : 360
 Last Step                : 4958314
-Blocks Since Last Step   : 56
-Subnet Volume (Alpha)    : t7,503.958763196
-Subnet Volume (Tao)      : τ776.874307691
+Blocks Since Last Step   : 359
+
+📈 Market
+------------------------------------------------------------
+Subnet Volume (Alpha)    : t7,546.618478178
+Subnet Volume (Tao)      : τ794.790116167
 Emission                 : 4.11%
-Price (Tao)              : 0.10353
-Moving Price (Tao)       : 0.17454
---------------------------------------------------
-DEBUG - increment: 0.001250, slippage: 0.000000, raw: (t0.012073951, t0.000000006)
-Final increment: 0.001250 (slippage: 0.000000)
-Remaining budget: 0.002500
-Price is below moving_price! STAKE TAO TO SUBNET!
-slippage for subnet 19 (t0.012073951, t0.000000006)
-netuid 19 stake added: increment 0.00125 @ price 0.103528595
-wallet balance: τ2.971664286τ
-netuid 19 stake: t0.000000000t
+Price (Tao)              : 0.10532
+Moving Price (Tao)       : 0.17659
+============================================================
+
+🔍 Finding optimal trade size...
+  • Testing 0.005000 TAO → 0.000000 slippage
+
+💫 Trade Parameters
+----------------------------------------
+Size                : 0.005000 TAO
+Slippage            : 0.000000 TAO
+Budget Left         : 0.010000 TAO
+----------------------------------------
+
+📈 Price below EMA - STAKING
+✅ Successfully staked 0.005000 TAO @ 0.105317
+
+💰 Wallet Status
+----------------------------------------
+Balance             : τ2.966039286τ
+Stake               : t72.069664160t
+----------------------------------------
+
+⏳ Waiting for next block...
+
+📊 Status Update
+----------------------------------------
+Last Step           : 4958675
+Blocks Since Last Step: 0
+Volume (α)          : 7546.71
+Volume (τ)          : 794.73
+Price (τ)           : 0.10531
+EMA (τ)             : 0.17660
+Diff                : -40.37%
+----------------------------------------
+
+🔍 Finding optimal trade size...
+  • Testing 0.002500 TAO → 0.000000 slippage
+
+💫 Trade Parameters
+----------------------------------------
+Size                : 0.002500 TAO
+Slippage            : 0.000000 TAO
+Budget Left         : 0.005000 TAO
+----------------------------------------
+
+📈 Price below EMA - STAKING
+✅ Successfully staked 0.002500 TAO @ 0.105309
+
+💰 Wallet Status
+----------------------------------------
+Balance             : τ2.963539286τ
+Stake               : t72.894814175t
+----------------------------------------
+
+⏳ Waiting for next block...
+
+📊 Status Update
+----------------------------------------
+Last Step           : 4958675
+Blocks Since Last Step: 2
+Volume (α)          : 7547.88
+Volume (τ)          : 794.80
+Price (τ)           : 0.10530
+EMA (τ)             : 0.17661
+Diff                : -40.38%
+----------------------------------------
+
+🔍 Finding optimal trade size...
+  • Testing 0.001250 TAO → 0.000000 slippage
+
+💫 Trade Parameters
+----------------------------------------
+Size                : 0.001250 TAO
+Slippage            : 0.000000 TAO
+Budget Left         : 0.002500 TAO
+----------------------------------------
+
+📈 Price below EMA - STAKING
+✅ Successfully staked 0.001250 TAO @ 0.105301
+
+💰 Wallet Status
+----------------------------------------
+Balance             : τ2.962289286τ
+Stake               : t72.906210632t
+----------------------------------------
+
+⏳ Waiting for next block...
+
+📊 Status Update
+----------------------------------------
+Last Step           : 4958675
+Blocks Since Last Step: 4
+Volume (α)          : 7547.97
+Volume (τ)          : 794.74
+Price (τ)           : 0.10529
+EMA (τ)             : 0.17663
+Diff                : -40.39%
+----------------------------------------
+
+🔍 Finding optimal trade size...
+  • Testing 0.000625 TAO → 0.000000 slippage
+
+💫 Trade Parameters
+----------------------------------------
+Size                : 0.000625 TAO
+Slippage            : 0.000000 TAO
+Budget Left         : 0.001250 TAO
+----------------------------------------
+
+📈 Price below EMA - STAKING
+✅ Successfully staked 0.000625 TAO @ 0.105292
+
+💰 Wallet Status
+----------------------------------------
+Balance             : τ2.961664286τ
+Stake               : t72.911671858t
+----------------------------------------
+
+⏳ Waiting for next block...
 ```
 
 
