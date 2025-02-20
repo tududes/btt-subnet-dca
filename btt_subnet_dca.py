@@ -257,10 +257,11 @@ async def chase_ema(netuid, wallet):
 
             alpha_price = float(subnet_info.price.tao)
             moving_price = float(subnet_info.moving_price) * 1e11
-            price_diff_pct = abs(alpha_price - moving_price) / moving_price
+            # Calculate what percentage the current price is of the EMA
+            price_diff_pct = (alpha_price / moving_price) - 1.0
 
             # Skip if price difference is less than minimum required
-            if price_diff_pct < args.min_price_diff:
+            if abs(price_diff_pct) < args.min_price_diff:
                 print(f"\n⏳ Price difference ({price_diff_pct:.2%}) < minimum required ({args.min_price_diff:.2%})")
                 print("💤 Waiting for larger price movement...")
                 await sub.wait_for_block()
@@ -338,9 +339,9 @@ async def chase_ema(netuid, wallet):
                 # 1.0 = full slippage when far from EMA
                 # 0.0 = no slippage when at min_price_diff
                 scale_factor = min(1.0, max(0.0, 
-                    (price_diff_pct - args.min_price_diff) / 
+                    abs(price_diff_pct) - args.min_price_diff) / 
                     (max_price_diff - args.min_price_diff) if max_price_diff > args.min_price_diff else 0.0
-                ))
+                )
                 
                 # Scale slippage down from base slippage as we get closer to EMA
                 target_slippage = args.slippage * scale_factor

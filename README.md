@@ -37,9 +37,12 @@ The script includes an optional dynamic slippage adjustment feature that scales 
 - Maximum slippage (--slippage) is used when price difference exceeds max-price-diff
 - Slippage scales down linearly as price approaches min-price-diff
 - No slippage applied when price difference is at min-price-diff
-- Scale factor (0.0-1.0) determines what fraction of base slippage to use
+- Price difference shows how far price has moved relative to EMA:
+  - -50% means price is half of EMA
+  - +100% means price is double EMA
+  - 0% means price equals EMA
 
-Example output:
+Example output when price is within the min-price-diff:
 ```
 📊 Dynamic Slippage Adjustment
 ----------------------------------------
@@ -48,7 +51,20 @@ Min Price Diff      : 5.00%
 Max Price Diff      : 20.00%
 Current Price Diff  : 15.50%
 Scale Factor        : 0.70
-Target Slippage     : 0.000070
+Target Slippage     : 0.000730
+----------------------------------------
+```
+
+Example output when price is beyond the max-price-diff:
+```
+📊 Dynamic Slippage Adjustment
+----------------------------------------
+Base Slippage       : 0.000100
+Min Price Diff      : 5.00%
+Max Price Diff      : 20.00%
+Current Price Diff  : -66.67%
+Scale Factor        : 1.00
+Target Slippage     : 0.000100
 ----------------------------------------
 ```
 
