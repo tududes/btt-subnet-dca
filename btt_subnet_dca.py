@@ -375,30 +375,40 @@ async def chase_ema(netuid, wallet):
             min_increment = 0.0
             best_increment = 0.0
             closest_slippage = float('inf')
+            iterations = []
             
             print("\n🔍 Finding optimal trade size...")
-            while (max_increment - min_increment) > 1e-8:  # More precision
+            while (max_increment - min_increment) > 1e-12:  # Even more precision
                 current_increment = (min_increment + max_increment) / 2
                 slippage_tuple = subnet_info.slippage(current_increment)
                 slippage = float(slippage_tuple[1].tao)
-                print(f"  • Testing {current_increment:.8f} TAO → {slippage:.8f} slippage")
+                
+                # Store iteration info
+                iterations.append((current_increment, slippage))
                 
                 if abs(slippage - target_slippage) < abs(closest_slippage - target_slippage):
                     closest_slippage = slippage
                     best_increment = current_increment
                 
-                if abs(slippage - target_slippage) < 1e-8:  # Tighter precision
+                if abs(slippage - target_slippage) < 1e-12:  # Matching precision
                     break
                 elif slippage < target_slippage:
                     min_increment = current_increment
                 else:
                     max_increment = current_increment
 
+            # Print first 3 and last 3 iterations
+            for i, (inc, slip) in enumerate(iterations):
+                if i < 3 or i >= len(iterations) - 3:
+                    print(f"  • Testing {inc:.12f} TAO → {slip:.12f} slippage")
+                elif i == 3:
+                    print("  • ...")
+
             increment = best_increment
             print(f"\n💫 Trade Parameters")
             print("-" * 40)
-            print(f"{'Size':20}: {increment:.6f} TAO")
-            print(f"{'Slippage':20}: {float(subnet_info.slippage(increment)[1].tao):.6f} TAO")
+            print(f"{'Size':20}: {increment:.12f} TAO")
+            print(f"{'Slippage':20}: {float(subnet_info.slippage(increment)[1].tao):.12f} TAO")
             if args.budget > 0:
                 print(f"{'Budget Left':20}: {remaining_budget:.6f} TAO")
             else:
