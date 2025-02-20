@@ -377,17 +377,17 @@ async def chase_ema(netuid, wallet):
             closest_slippage = float('inf')
             
             print("\n🔍 Finding optimal trade size...")
-            while (max_increment - min_increment) > 1e-6:
+            while (max_increment - min_increment) > 1e-8:  # More precision
                 current_increment = (min_increment + max_increment) / 2
                 slippage_tuple = subnet_info.slippage(current_increment)
                 slippage = float(slippage_tuple[1].tao)
-                print(f"  • Testing {current_increment:.6f} TAO → {slippage:.6f} slippage")
+                print(f"  • Testing {current_increment:.8f} TAO → {slippage:.8f} slippage")
                 
                 if abs(slippage - target_slippage) < abs(closest_slippage - target_slippage):
                     closest_slippage = slippage
                     best_increment = current_increment
                 
-                if abs(slippage - target_slippage) < SLIPPAGE_PRECISION:
+                if abs(slippage - target_slippage) < 1e-8:  # Tighter precision
                     break
                 elif slippage < target_slippage:
                     min_increment = current_increment
