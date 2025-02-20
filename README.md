@@ -610,6 +610,12 @@ reports.print_wallet_summary("5CnFd...")
 - 📊 Add graphical visualizations for historical data
 - 🔔 Webhooks to a Telegram channel or Discord server for live monitoring and alerts
 - ⚙️ Add configuration file support for persistent settings
+- 💱 Replace dynamic slippage with dynamic budget scaling:
+  - As subnet liquidity grows, slippage becomes less significant
+  - Dynamic budget would scale trade size based on price deviation
+  - Larger trades when far from EMA, smaller when close
+  - More intuitive for deep liquidity pools
+  - Easier to configure and understand
 
 
 ## ⚠️ Final Notes
