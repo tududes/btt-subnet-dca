@@ -8,7 +8,7 @@ class SubnetDCAReports:
     def __init__(self, db: SubnetDCADatabase):
         self.db = db
 
-    def get_time_segment_stats(self, hours: int):
+    def get_time_segment_stats(self, hours: int, include_test_mode: bool = False):
         """Get statistics for a specific time segment"""
         query = '''
             SELECT 
@@ -19,22 +19,27 @@ class SubnetDCAReports:
                 AVG(price_tao) as avg_price,
                 MIN(price_tao) as min_price,
                 MAX(price_tao) as max_price,
-                AVG(price_diff_pct) as avg_diff
+                AVG(price_diff_pct) as avg_diff,
+                AVG(slippage_tao) as avg_slippage,
+                COUNT(CASE WHEN success = 1 THEN 1 END) as successful_txs,
+                COUNT(CASE WHEN success = 0 THEN 1 END) as failed_txs
             FROM transactions
             WHERE timestamp >= datetime('now', '-' || ? || ' hours')
+            AND (test_mode = ? OR test_mode IS NULL)
             GROUP BY strftime('%Y-%m-%d %H:00', timestamp)
             ORDER BY hour DESC
         '''
-        cursor = self.db.conn.execute(query, (hours,))
+        cursor = self.db.conn.execute(query, (hours, include_test_mode))
         return cursor.fetchall()
 
-    def print_summary(self, hours_segments=[6, 12, 24, 48, 72]):
+    def print_summary(self, hours_segments=[6, 12, 24, 48, 72], include_test_mode: bool = False):
         """Print summary for different time segments"""
-        print("\n📊 Subnet DCA Activity Summary")
+        mode_str = "Test Mode" if include_test_mode else "Live Mode"
+        print(f"\n📊 Subnet DCA Activity Summary ({mode_str})")
         print("=" * 80)
 
         for hours in hours_segments:
-            stats = self.get_time_segment_stats(hours)
+            stats = self.get_time_segment_stats(hours, include_test_mode)
             if not stats:
                 continue
 
@@ -42,12 +47,15 @@ class SubnetDCAReports:
             total_unstaked = sum(row[3] or 0 for row in stats)
             avg_prices = [row[4] for row in stats if row[4]]
             price_diffs = [row[7] for row in stats if row[7]]
+            slippages = [row[8] for row in stats if row[8]]
+            successful_txs = sum(row[9] or 0 for row in stats)
+            failed_txs = sum(row[10] or 0 for row in stats)
 
             print(f"\n🕒 Last {hours} Hours")
             print("-" * 80)
             print(f"{'Metric':25} | {'Value':20} | {'Details'}")
             print("-" * 80)
-            print(f"{'Transactions':25} | {sum(row[1] for row in stats):20.0f} | {len(stats)} active hours")
+            print(f"{'Transactions':25} | {sum(row[1] for row in stats):20.0f} | {successful_txs} successful, {failed_txs} failed")
             print(f"{'Total Staked':25} | {total_staked:20.6f} | τ")
             print(f"{'Total Unstaked':25} | {total_unstaked:20.6f} | τ")
             print(f"{'Net Position':25} | {total_staked - total_unstaked:20.6f} | τ")
@@ -59,6 +67,10 @@ class SubnetDCAReports:
             if price_diffs:
                 print(f"{'Average Price Diff':25} | {statistics.mean(price_diffs)*100:19.2f}% | from EMA")
 
+            if slippages:
+                print(f"{'Average Slippage':25} | {statistics.mean(slippages):20.6f} | τ")
+                print(f"{'Max Slippage':25} | {max(slippages):20.6f} | τ")
+
             # Simple ASCII chart of activity
             if stats:
                 print("\nActivity Chart (each █ = 1 transaction)")
@@ -66,18 +78,55 @@ class SubnetDCAReports:
                 for row in stats[:10]:  # Show last 10 hours
                     hour = datetime.strptime(row[0], '%Y-%m-%d %H:00')
                     bar = "█" * min(row[1], 50)  # Limit bar length to 50
-                    print(f"{hour.strftime('%Y-%m-%d %H:00'):20} | {bar} ({row[1]})")
+                    success_rate = row[9] / row[1] * 100 if row[1] > 0 else 0
+                    print(f"{hour.strftime('%Y-%m-%d %H:00'):20} | {bar} ({row[1]} txs, {success_rate:.1f}% success)")
 
-    def print_wallet_summary(self, coldkey: str):
+    def get_wallet_stats(self, coldkey: str, period: str = '24h', include_test_mode: bool = False):
+        """Get wallet statistics for a given time period"""
+        periods = {
+            '24h': 'timestamp >= datetime("now", "-1 day")',
+            '7d': 'timestamp >= datetime("now", "-7 days")',
+            '30d': 'timestamp >= datetime("now", "-30 days")',
+            'all': '1=1'
+        }
+        where_clause = periods.get(period, periods['24h'])
+
+        query = f'''
+            WITH wallet_ids AS (
+                SELECT id FROM wallets WHERE coldkey = ?
+            )
+            SELECT 
+                COUNT(*) as total_transactions,
+                SUM(CASE WHEN operation = 'stake' THEN amount_tao ELSE 0 END) as total_staked,
+                SUM(CASE WHEN operation = 'unstake' THEN amount_tao ELSE 0 END) as total_unstaked,
+                SUM(CASE WHEN operation = 'stake' THEN amount_alpha ELSE 0 END) as total_alpha_staked,
+                SUM(CASE WHEN operation = 'unstake' THEN amount_alpha ELSE 0 END) as total_alpha_unstaked,
+                AVG(price_tao) as avg_price,
+                AVG(price_diff_pct) as avg_price_diff,
+                COUNT(CASE WHEN success = 1 THEN 1 END) as successful_txs,
+                COUNT(CASE WHEN success = 0 THEN 1 END) as failed_txs,
+                AVG(slippage_tao) as avg_slippage,
+                MAX(slippage_tao) as max_slippage
+            FROM transactions t
+            JOIN wallet_ids w ON t.wallet_id = w.id
+            WHERE {where_clause}
+            AND (test_mode = ? OR test_mode IS NULL)
+        '''
+        
+        cursor = self.db.conn.execute(query, (coldkey, include_test_mode))
+        return cursor.fetchone()
+
+    def print_wallet_summary(self, coldkey: str, include_test_mode: bool = False):
         """Print summary for a specific wallet"""
+        mode_str = "Test Mode" if include_test_mode else "Live Mode"
         periods = ['24h', '7d', '30d', 'all']
         
-        print(f"\n👛 Wallet Summary for {coldkey[:10]}...")
+        print(f"\n👛 Wallet Summary for {coldkey[:10]}... ({mode_str})")
         print("=" * 80)
         
         for period in periods:
-            stats = self.db.get_wallet_stats(coldkey, period)
-            if not stats or stats[0] == 0:  # No transactions or all values are NULL
+            stats = self.get_wallet_stats(coldkey, period, include_test_mode)
+            if not stats or stats[0] == 0:
                 print(f"\n📅 Period: {period}")
                 print("-" * 80)
                 print(f"{'Metric':25} | {'Value':20} | {'Details'}")
@@ -97,6 +146,9 @@ class SubnetDCAReports:
                 print(f"{'Average Price':25} | {stats[5]:20.6f} | τ")
             if stats[6]:  # If we have price diff data
                 print(f"{'Average Price Diff':25} | {stats[6]*100:19.2f}% | from EMA")
+            if stats[9]:  # If we have slippage data
+                print(f"{'Average Slippage':25} | {stats[9]:20.6f} | τ")
+                print(f"{'Max Slippage':25} | {stats[10]:20.6f} | τ")
 
     def get_all_wallets(self):
         """Get list of all wallets in database"""

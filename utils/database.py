@@ -114,38 +114,6 @@ class SubnetDCADatabase:
         except Exception as e:
             print(f"❌ Error updating balances: {e}")
 
-    def get_wallet_stats(self, coldkey: str, period: str = '24h'):
-        """Get wallet statistics for a given time period"""
-        periods = {
-            '24h': 'timestamp >= datetime("now", "-1 day")',
-            '7d': 'timestamp >= datetime("now", "-7 days")',
-            '30d': 'timestamp >= datetime("now", "-30 days")',
-            'all': '1=1'
-        }
-        where_clause = periods.get(period, periods['24h'])
-
-        query = f'''
-            WITH wallet_ids AS (
-                SELECT id FROM wallets WHERE coldkey = ?
-            )
-            SELECT 
-                COUNT(*) as total_transactions,
-                SUM(CASE WHEN operation = 'stake' THEN amount_tao ELSE 0 END) as total_staked,
-                SUM(CASE WHEN operation = 'unstake' THEN amount_tao ELSE 0 END) as total_unstaked,
-                SUM(CASE WHEN operation = 'stake' THEN amount_alpha ELSE 0 END) as total_alpha_staked,
-                SUM(CASE WHEN operation = 'unstake' THEN amount_alpha ELSE 0 END) as total_alpha_unstaked,
-                AVG(price_tao) as avg_price,
-                AVG(price_diff_pct) as avg_price_diff,
-                COUNT(CASE WHEN success = 1 THEN 1 END) as successful_txs,
-                COUNT(CASE WHEN success = 0 THEN 1 END) as failed_txs
-            FROM transactions t
-            JOIN wallet_ids w ON t.wallet_id = w.id
-            WHERE {where_clause}
-        '''
-        
-        cursor = self.conn.execute(query, (coldkey,))
-        return cursor.fetchone()
-
     def close(self):
         """Close database connection"""
         self.conn.close() 

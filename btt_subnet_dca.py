@@ -7,6 +7,7 @@ import getpass  # Add this import at the top
 from utils.database import SubnetDCADatabase
 from reports import SubnetDCAReports
 from utils.password_manager import WalletPasswordManager
+import signal
 
 # Constants
 SUBTENSOR = 'ws://127.0.0.1:9944' # finney or use a local subtensor via ws://127.0.0.1:9944
@@ -622,3 +623,11 @@ else:
     except Exception as e:
         print(f"\nError accessing wallet: {e}")
         sys.exit(1)
+
+def signal_handler(signum, frame):
+    print("\n⚠️ Received termination signal. Cleaning up...")
+    # Close any open connections
+    sys.exit(0)
+
+signal.signal(signal.SIGTERM, signal_handler)
+signal.signal(signal.SIGINT, signal_handler)
