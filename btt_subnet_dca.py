@@ -9,7 +9,7 @@ from reports import SubnetDCAReports
 from utils.password_manager import WalletPasswordManager
 
 # Constants
-SUBTENSOR = 'finney' # or use a local subtensor via ws://127.0.0.1:9944
+SUBTENSOR = 'ws://127.0.0.1:9944' # finney or use a local subtensor via ws://127.0.0.1:9944
 BLOCK_TIME_SECONDS = 12   
 SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO)
 
@@ -90,6 +90,18 @@ This script will chase the EMA of the price of TAO and:
         help='🔑 Password for all wallets (required with --rotate-all-wallets)'
     )
 
+    # Add dynamic slippage option
+    parser.add_argument(
+        '--dynamic-slippage',
+        action='store_true',
+        help='📊 Dynamically adjust slippage based on price difference from EMA'
+    )
+    parser.add_argument(
+        '--max-price-diff',
+        type=float,
+        help='📈 Maximum price difference for dynamic slippage scaling (e.g., 0.20 for 20%)'
+    )
+
     # Print help if no arguments are provided
     if len(sys.argv) == 1:
         parser.print_help()
@@ -106,6 +118,11 @@ This script will chase the EMA of the price of TAO and:
     else:
         if not all([args.netuid, args.wallet, args.hotkey, args.slippage, args.budget is not None]):
             parser.error("--netuid, --wallet, --hotkey, --slippage, and --budget are required when not using --rotate-all-wallets")
+    
+    # Validate dynamic slippage arguments
+    if args.dynamic_slippage:
+        if args.max_price_diff is not None and args.max_price_diff < args.min_price_diff:
+            parser.error("--max-price-diff must be greater than --min-price-diff")
     
     return args
 
@@ -283,7 +300,8 @@ async def chase_ema(netuid, wallet):
                         ('Subnet Volume (Tao)', str(subnet_info.subnet_volume * alpha_price)),
                         ('Emission', f"{float(subnet_info.tao_in_emission * 1e2):.2f}%"),
                         ('Price (Tao)', f"{float(alpha_price):.5f}"),
-                        ('Moving Price (Tao)', f"{float(moving_price):.5f}")
+                        ('Moving Price (Tao)', f"{float(moving_price):.5f}"),
+                        ('Price Difference', f"{((alpha_price - moving_price) / moving_price):.2%}")
                     ]
                 }
                 
@@ -310,6 +328,33 @@ async def chase_ema(netuid, wallet):
                     print(f"{key:20}: {value}")
                 print("-" * 40)
 
+            # Calculate dynamic slippage if enabled
+            target_slippage = args.slippage
+            if args.dynamic_slippage:
+                # Get the maximum price difference, default to 20% if not specified
+                max_price_diff = args.max_price_diff if args.max_price_diff is not None else 0.20
+                
+                # Calculate scale factor based on how close we are to min_price_diff
+                # 1.0 = full slippage when far from EMA
+                # 0.0 = no slippage when at min_price_diff
+                scale_factor = min(1.0, max(0.0, 
+                    (price_diff_pct - args.min_price_diff) / 
+                    (max_price_diff - args.min_price_diff) if max_price_diff > args.min_price_diff else 0.0
+                ))
+                
+                # Scale slippage down from base slippage as we get closer to EMA
+                target_slippage = args.slippage * scale_factor
+                
+                print(f"\n📊 Dynamic Slippage Adjustment")
+                print("-" * 40)
+                print(f"{'Base Slippage':20}: {args.slippage:.6f}")
+                print(f"{'Min Price Diff':20}: {args.min_price_diff:.2%}")
+                print(f"{'Max Price Diff':20}: {max_price_diff:.2%}")
+                print(f"{'Current Price Diff':20}: {price_diff_pct:.2%}")
+                print(f"{'Scale Factor':20}: {scale_factor:.2f}")
+                print(f"{'Target Slippage':20}: {target_slippage:.6f}")
+                print("-" * 40)
+
             # Set max_increment based on budget or available balance
             if args.budget == 0:
                 if alpha_price > moving_price:  # Unstaking
@@ -326,7 +371,6 @@ async def chase_ema(netuid, wallet):
                 break
 
             # Rest of the binary search code remains the same
-            target_slippage = args.slippage
             min_increment = 0.0
             best_increment = 0.0
             closest_slippage = float('inf')

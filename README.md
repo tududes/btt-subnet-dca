@@ -30,6 +30,55 @@ This auto-tuning ensures that:
 - Each trade maintains your desired slippage target
 - The script adapts to changing market conditions automatically
 
+### 📊 Dynamic Slippage Control
+The script includes an optional dynamic slippage adjustment feature that scales the slippage based on price deviation from the EMA:
+
+#### How It Works
+- Maximum slippage (--slippage) is used when price difference exceeds max-price-diff
+- Slippage scales down linearly as price approaches min-price-diff
+- No slippage applied when price difference is at min-price-diff
+- Scale factor (0.0-1.0) determines what fraction of base slippage to use
+
+Example output:
+```
+📊 Dynamic Slippage Adjustment
+----------------------------------------
+Base Slippage       : 0.000100
+Min Price Diff      : 5.00%
+Max Price Diff      : 20.00%
+Current Price Diff  : 15.50%
+Scale Factor        : 0.70
+Target Slippage     : 0.000070
+----------------------------------------
+```
+
+#### Usage
+Enable dynamic slippage with these optional flags:
+```bash
+python3 btt_subnet_dca.py \
+    --netuid 19 \
+    --wallet coldkey-01 \
+    --hotkey hotkey-01 \
+    --slippage 0.0001 \
+    --min-price-diff 0.05 \
+    --max-price-diff 0.20 \
+    --dynamic-slippage \
+    --test
+```
+
+#### Parameters
+- `--dynamic-slippage`: Enable dynamic slippage adjustment
+- `--min-price-diff`: Price difference where base slippage is used (e.g., 0.05 for 5%)
+- `--max-price-diff`: Price difference where maximum slippage is used (e.g., 0.20 for 20%)
+- `--slippage`: Base slippage value
+
+This feature allows for:
+- Minimal slippage when price is near the EMA
+- Gradually increasing slippage as price deviates further
+- Maximum slippage (10x base) when price difference exceeds max-price-diff
+- Full slippage when price difference exceeds max-price-diff
+- Automatic adjustment based on market conditions
+
 ### 📊 Database & Reporting
 The script maintains a SQLite database to track all operations and provides detailed reporting:
 
