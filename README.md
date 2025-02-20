@@ -306,6 +306,58 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## ⚙️ Environment Configuration
+
+The bot can be configured using environment variables. Create a `.env` file in the root directory by copying the sample:
+
+```bash
+cp .env.sample .env
+chmod 600 .env  # Restrict file permissions
+```
+
+### Available Settings
+
+#### 🌐 Network Settings
+- `SUBTENSOR`: Subtensor network endpoint
+  - Default: `finney` (mainnet)
+  - Alternative: `ws://127.0.0.1:9944` (local subtensor)
+- `BLOCK_TIME_SECONDS`: Block time in seconds
+  - Default: `12`
+
+#### 💰 Trading Settings
+- `SAFETY_BALANCE`: Minimum TAO balance to maintain
+  - Default: `1.0`
+  - Example: Set to `10.0` to keep at least 10 TAO in wallet
+- `SLIPPAGE_PRECISION`: Target slippage precision in TAO
+  - Default: `0.0001`
+  - Example: `0.0001` TAO = $0.05 in slippage for $500 TAO
+
+#### 🔑 Wallet Passwords (Optional)
+You can store wallet passwords in the `.env` file using the following format:
+```
+BT_PW__ROOT__BITTENSOR_WALLETS_<wallet-name>_COLDKEY=<password>
+```
+
+Example:
+```
+BT_PW__ROOT__BITTENSOR_WALLETS_COLDKEY-01_COLDKEY=your-password-here
+```
+
+### ⚠️ Security Notes
+
+The `.env` file contains sensitive information. Make sure to:
+- Never commit it to version control
+- Restrict file permissions (`chmod 600 .env`)
+- Back it up securely
+- Keep passwords in a secure password manager
+
+### 🔄 Configuration Priority
+
+Settings are applied in the following order (highest to lowest priority):
+1. Command line arguments
+2. Environment variables from `.env`
+3. Default values in code
+
 ## 📝 Usage
 ```bash
 cd $HOME/btt-subnet-dca

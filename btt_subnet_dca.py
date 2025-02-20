@@ -3,17 +3,13 @@ import sys
 import os
 import argparse
 from datetime import datetime, timedelta, timezone
-import getpass  # Add this import at the top
+import getpass
 from utils.database import SubnetDCADatabase
 from reports import SubnetDCAReports
 from utils.password_manager import WalletPasswordManager
+from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, SAFETY_BALANCE, SLIPPAGE_PRECISION
 import signal
 
-# Constants
-SUBTENSOR = 'ws://127.0.0.1:9944' # finney or use a local subtensor via ws://127.0.0.1:9944
-BLOCK_TIME_SECONDS = 12   
-SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO)
-SAFETY_BALANCE = 1.0  # Minimum TAO balance to maintain
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
