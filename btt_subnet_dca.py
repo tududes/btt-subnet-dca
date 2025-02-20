@@ -243,17 +243,7 @@ async def chase_ema(netuid, wallet):
     
     try:
         async with bt.AsyncSubtensor(SUBTENSOR) as sub:
-            # Verify connection by attempting to get subnets
-            try:
-                subnets = await sub.get_subnets()
-                if netuid not in [net.netuid for net in subnets]:
-                    print(f"❌ Subnet {netuid} not found")
-                    return
-            except Exception as e:
-                print("❌ Failed to connect to Subtensor")
-                print(f"Error: {e}")
-                return
-                
+
             while True:
                 try:
                     subnet_info = await sub.subnet(netuid)
