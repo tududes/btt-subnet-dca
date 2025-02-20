@@ -391,11 +391,14 @@ async def chase_ema(netuid, wallet):
 
                 if not TEST_MODE:
                     try:
-                        await sub.unstake( 
+                        results = await sub.unstake( 
                             wallet = wallet, 
                             netuid = netuid,
                             amount = bt.Balance.from_float(alpha_amount), 
                         )
+                        if not results:
+                            raise Exception("Unstake failed")
+                        
                         db.log_transaction(
                             coldkey=wallet.coldkeypub.ss58_address,
                             hotkey=wallet.hotkey.ss58_address,
@@ -446,11 +449,14 @@ async def chase_ema(netuid, wallet):
 
                 if not TEST_MODE:
                     try:
-                        await sub.add_stake( 
+                        results = await sub.add_stake( 
                             wallet = wallet, 
                             netuid = netuid,
                             amount = bt.Balance.from_tao(increment), 
                         )
+                        if not results:
+                            raise Exception("Stake failed")
+                        
                         db.log_transaction(
                             coldkey=wallet.coldkeypub.ss58_address,
                             hotkey=wallet.hotkey.ss58_address,
