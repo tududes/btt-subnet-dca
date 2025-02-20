@@ -20,6 +20,11 @@ When using `--budget 0`, the script will:
 - For staking: Use the full available TAO balance on the coldkey
 - For unstaking: Use the full available subnet alpha balance staked to the hotkey (converted to TAO)
 
+A safety balance of 1.0 TAO is maintained to prevent completely emptying wallets:
+- Staking operations that would reduce balance below 1.0 TAO are skipped
+- The wallet is removed from rotation when this occurs
+- Unstaking operations are not affected by safety balance
+
 2. It then performs a binary search to find the largest trade size that stays within your slippage target
 3. If the calculated slippage would be too high, it reduces the trade size
 4. If the calculated slippage would be too low, it increases the trade size

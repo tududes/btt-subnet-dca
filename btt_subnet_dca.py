@@ -12,6 +12,7 @@ from utils.password_manager import WalletPasswordManager
 SUBTENSOR = 'ws://127.0.0.1:9944' # finney or use a local subtensor via ws://127.0.0.1:9944
 BLOCK_TIME_SECONDS = 12   
 SLIPPAGE_PRECISION = 0.0001  # Precision of 0.0001 tao ($0.05 in slippage for $500 TAO)
+SAFETY_BALANCE = 1.0  # Minimum TAO balance to maintain
 
 def parse_arguments():
     parser = argparse.ArgumentParser(
@@ -329,6 +330,13 @@ async def chase_ema(netuid, wallet):
                     print(f"{key:20}: {value}")
                 print("-" * 40)
 
+            # Check if balance is too low before attempting operations
+            if float(balance) < SAFETY_BALANCE:
+                print(f"\n⚠️  Balance ({float(balance):.6f} τ) below safety minimum ({SAFETY_BALANCE} τ)")
+                print("💤 Waiting for funds...")
+                await sub.wait_for_block()
+                continue
+
             # Calculate dynamic slippage if enabled
             target_slippage = args.slippage
             if args.dynamic_slippage:
@@ -363,7 +371,8 @@ async def chase_ema(netuid, wallet):
                     stake_conversion = subnet_info.alpha_to_tao_with_slippage(alpha=float(current_stake))
                     max_increment = float(stake_conversion[0].tao + stake_conversion[1].tao)
                 else:  # Staking
-                    max_increment = float(balance)
+                    # Account for safety balance when staking
+                    max_increment = float(balance) - SAFETY_BALANCE
             else:
                 max_increment = remaining_budget
 
