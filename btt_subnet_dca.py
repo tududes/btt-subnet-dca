@@ -236,6 +236,126 @@ async def rotate_wallets(netuid, unlocked_wallets):
             # Run one complete cycle of the EMA chasing for this wallet
             await chase_ema(netuid, wallet)
 
+
+
+def log_operation(db, wallet, operation: str, amount_tao: float, amount_alpha: float, 
+                 price_tao: float, ema_price: float, slippage: float, success: bool, 
+                 error_msg: str = None, test_mode: bool = False):
+    """Helper function to log all operations to database"""
+    try:
+        db.log_transaction(
+            coldkey=wallet.coldkeypub.ss58_address,
+            hotkey=wallet.hotkey.ss58_address,
+            operation=operation,
+            amount_tao=amount_tao,
+            amount_alpha=amount_alpha,
+            price_tao=price_tao,
+            ema_price=ema_price,
+            slippage=slippage,
+            success=success,
+            error_msg=error_msg,
+            test_mode=test_mode
+        )
+    except Exception as e:
+        print(f"❌ Error logging transaction: {e}")
+
+async def perform_stake(sub, wallet, netuid, increment, alpha_price, moving_price, subnet_info, test_mode=False):
+    """Perform stake operation with error handling and logging"""
+    slippage_info = subnet_info.slippage(increment)
+    slippage = float(slippage_info[1].tao)
+    
+    try:
+        if not test_mode:
+            results = await sub.add_stake(
+                wallet=wallet,
+                netuid=netuid,
+                amount=bt.Balance.from_tao(increment),
+            )
+            if not results:
+                raise Exception("Stake failed")
+            
+            print(f"✅ Successfully staked {increment:.6f} TAO @ {alpha_price:.6f} to cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
+            
+            log_operation(
+                db=db,
+                wallet=wallet,
+                operation='stake',
+                amount_tao=increment,
+                amount_alpha=increment/alpha_price,
+                price_tao=alpha_price,
+                ema_price=moving_price,
+                slippage=slippage,
+                success=True,
+                test_mode=test_mode
+            )
+            return True
+        else:
+            print(f"🧪 TEST MODE: Would have staked {increment:.6f} TAO to cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
+            return True
+    except Exception as e:
+        log_operation(
+            db=db,
+            wallet=wallet,
+            operation='stake',
+            amount_tao=increment,
+            amount_alpha=increment/alpha_price,
+            price_tao=alpha_price,
+            ema_price=moving_price,
+            slippage=slippage,
+            success=False,
+            error_msg=str(e),
+            test_mode=test_mode
+        )
+        print(f"❌ Error staking: {e}")
+        return False
+
+async def perform_unstake(sub, wallet, netuid, alpha_amount, total_tao_impact, alpha_price, moving_price, test_mode=False):
+    """Perform unstake operation with error handling and logging"""
+    try:
+        if not test_mode:
+            results = await sub.unstake(
+                wallet=wallet,
+                netuid=netuid,
+                amount=bt.Balance.from_float(alpha_amount),
+            )
+            if not results:
+                raise Exception("Unstake failed")
+            
+            print(f"✅ Successfully unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ @ {alpha_price:.6f} from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
+            
+            log_operation(
+                db=db,
+                wallet=wallet,
+                operation='unstake',
+                amount_tao=total_tao_impact,
+                amount_alpha=alpha_amount,
+                price_tao=alpha_price,
+                ema_price=moving_price,
+                slippage=float(tao_conversion[1].tao),
+                success=True,
+                test_mode=test_mode
+            )
+            return True
+        else:
+            print(f"🧪 TEST MODE: Would have unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
+            return True
+    except Exception as e:
+        log_operation(
+            db=db,
+            wallet=wallet,
+            operation='unstake',
+            amount_tao=total_tao_impact,
+            amount_alpha=alpha_amount,
+            price_tao=alpha_price,
+            ema_price=moving_price,
+            slippage=float(tao_conversion[1].tao),
+            success=False,
+            error_msg=str(e),
+            test_mode=test_mode
+        )
+        print(f"❌ Error unstaking: {e}")
+        return False
+    
 async def chase_ema(netuid, wallet):
     """Run one cycle of EMA chasing for a wallet"""
     remaining_budget = args.budget  # Initialize remaining budget
@@ -501,6 +621,7 @@ async def chase_ema(netuid, wallet):
                             increment=increment,
                             alpha_price=alpha_price,
                             moving_price=moving_price,
+                            subnet_info=subnet_info,
                             test_mode=TEST_MODE
                         )
                         
@@ -588,118 +709,3 @@ def signal_handler(signum, frame):
 
 signal.signal(signal.SIGTERM, signal_handler)
 signal.signal(signal.SIGINT, signal_handler)
-
-def log_operation(db, wallet, operation: str, amount_tao: float, amount_alpha: float, 
-                 price_tao: float, ema_price: float, slippage: float, success: bool, 
-                 error_msg: str = None, test_mode: bool = False):
-    """Helper function to log all operations to database"""
-    try:
-        db.log_transaction(
-            coldkey=wallet.coldkeypub.ss58_address,
-            hotkey=wallet.hotkey.ss58_address,
-            operation=operation,
-            amount_tao=amount_tao,
-            amount_alpha=amount_alpha,
-            price_tao=price_tao,
-            ema_price=ema_price,
-            slippage=slippage,
-            success=success,
-            error_msg=error_msg,
-            test_mode=test_mode
-        )
-    except Exception as e:
-        print(f"❌ Error logging transaction: {e}")
-
-async def perform_stake(sub, wallet, netuid, increment, alpha_price, moving_price, test_mode=False):
-    """Perform stake operation with error handling and logging"""
-    try:
-        if not test_mode:
-            results = await sub.add_stake(
-                wallet=wallet,
-                netuid=netuid,
-                amount=bt.Balance.from_tao(increment),
-            )
-            if not results:
-                raise Exception("Stake failed")
-            
-            print(f"✅ Successfully staked {increment:.6f} TAO @ {alpha_price:.6f} to cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
-            
-            log_operation(
-                db=db,
-                wallet=wallet,
-                operation='stake',
-                amount_tao=increment,
-                amount_alpha=increment/alpha_price,
-                price_tao=alpha_price,
-                ema_price=moving_price,
-                slippage=float(subnet_info.slippage(increment)[1].tao),
-                success=True,
-                test_mode=test_mode
-            )
-            return True
-        else:
-            print(f"🧪 TEST MODE: Would have staked {increment:.6f} TAO to cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
-            return True
-    except Exception as e:
-        log_operation(
-            db=db,
-            wallet=wallet,
-            operation='stake',
-            amount_tao=increment,
-            amount_alpha=increment/alpha_price,
-            price_tao=alpha_price,
-            ema_price=moving_price,
-            slippage=float(subnet_info.slippage(increment)[1].tao),
-            success=False,
-            error_msg=str(e),
-            test_mode=test_mode
-        )
-        print(f"❌ Error staking: {e}")
-        return False
-
-async def perform_unstake(sub, wallet, netuid, alpha_amount, total_tao_impact, alpha_price, moving_price, test_mode=False):
-    """Perform unstake operation with error handling and logging"""
-    try:
-        if not test_mode:
-            results = await sub.unstake(
-                wallet=wallet,
-                netuid=netuid,
-                amount=bt.Balance.from_float(alpha_amount),
-            )
-            if not results:
-                raise Exception("Unstake failed")
-            
-            print(f"✅ Successfully unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ @ {alpha_price:.6f} from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
-            
-            log_operation(
-                db=db,
-                wallet=wallet,
-                operation='unstake',
-                amount_tao=total_tao_impact,
-                amount_alpha=alpha_amount,
-                price_tao=alpha_price,
-                ema_price=moving_price,
-                slippage=float(tao_conversion[1].tao),
-                success=True,
-                test_mode=test_mode
-            )
-            return True
-        else:
-            print(f"🧪 TEST MODE: Would have unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
-            return True
-    except Exception as e:
-        log_operation(
-            db=db,
-            wallet=wallet,
-            operation='unstake',
-            amount_tao=total_tao_impact,
-            amount_alpha=alpha_amount,
-            price_tao=alpha_price,
-            ema_price=moving_price,
-            slippage=float(tao_conversion[1].tao),
-            success=False,
-            error_msg=str(e),
-            test_mode=test_mode
-        )
-        print(f"❌ Error unstaking: {e}")
-        return False
