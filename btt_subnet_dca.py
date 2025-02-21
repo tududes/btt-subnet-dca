@@ -377,17 +377,13 @@ async def chase_ema(netuid, wallet):
                         )
                     except Exception as e:
                         print(f"❌ Error getting stake: {e}")
-                        print("⏳ Waiting before retry...")
-                        await asyncio.sleep(BLOCK_TIME_SECONDS)  # Wait one block
-                        continue
+                        break
                         
                     try:
                         balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
                     except Exception as e:
                         print(f"❌ Error getting balance: {e}")
-                        print("⏳ Waiting before retry...")
-                        await asyncio.sleep(BLOCK_TIME_SECONDS)  # Wait one block
-                        continue
+                        break
 
                     alpha_price = float(subnet_info.price.tao)
                     moving_price = float(subnet_info.moving_price) * 1e11
@@ -399,7 +395,7 @@ async def chase_ema(netuid, wallet):
                         print(f"\n⏳ Price difference ({price_diff_pct:.2%}) < minimum required ({args.min_price_diff:.2%})")
                         print("💤 Waiting for larger price movement...")
                         await sub.wait_for_block()
-                        continue
+                        break
 
                     # Show full details on first run, compact view afterwards
                     if not subnet_info_displayed:
@@ -466,9 +462,7 @@ async def chase_ema(netuid, wallet):
                     # Check if balance is too low before attempting operations
                     if float(balance) < SAFETY_BALANCE:
                         print(f"\n⚠️  Balance ({float(balance):.6f} τ) below safety minimum ({SAFETY_BALANCE} τ)")
-                        print("💤 Waiting for funds...")
-                        await sub.wait_for_block()
-                        continue
+                        break
 
                     # Calculate dynamic slippage if enabled
                     target_slippage = args.slippage
@@ -575,7 +569,7 @@ async def chase_ema(netuid, wallet):
                         if args.one_way_mode == 'stake':
                             print("⏭️  Price above EMA but stake-only mode active. Skipping...")
                             await sub.wait_for_block()
-                            continue
+                            break
                             
                         print(f"\n📉 Price above EMA - UNSTAKING cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
                         
@@ -606,7 +600,7 @@ async def chase_ema(netuid, wallet):
                         if args.one_way_mode == 'unstake':
                             print("⏭️  Price below EMA but unstake-only mode active. Skipping...")
                             await sub.wait_for_block()
-                            continue
+                            break
                             
                         print(f"\n📈 Price below EMA - STAKING cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
 
@@ -630,6 +624,7 @@ async def chase_ema(netuid, wallet):
 
                     else:
                         print("🦄 Price equals EMA - No action needed")
+                        await sub.wait_for_block()
                         continue  # Don't decrement budget if no action taken
 
                     current_stake = await sub.get_stake(
@@ -659,7 +654,8 @@ async def chase_ema(netuid, wallet):
                         print("\n📈 Activity Summary")
                         reports.print_summary()
                         reports.print_wallet_summary(wallet.coldkeypub.ss58_address)
-                        return
+                        await sub.wait_for_block()
+                        break
                     
                     # For single wallet mode, continue to next block
                     print("\n⏳ Waiting for next block...")
@@ -669,7 +665,7 @@ async def chase_ema(netuid, wallet):
                     print(f"❌ Error in main loop: {e}")
                     print("⏳ Waiting before retry...")
                     await asyncio.sleep(BLOCK_TIME_SECONDS)
-                    continue
+                    break
                     
     except Exception as e:
         print(f"❌ Error connecting to Subtensor: {e}")
