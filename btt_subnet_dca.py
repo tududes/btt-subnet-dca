@@ -595,6 +595,7 @@ async def chase_ema(netuid, wallet):
                         
                         if success and args.budget > 0:
                             remaining_budget -= total_tao_impact
+                            await asyncio.sleep(1)
 
                     elif alpha_price < moving_price:
                         if args.one_way_mode == 'unstake':
@@ -621,6 +622,7 @@ async def chase_ema(netuid, wallet):
                         
                         if success and args.budget > 0:
                             remaining_budget -= increment
+                            await asyncio.sleep(1)
 
                     else:
                         print("🦄 Price equals EMA - No action needed")
@@ -652,8 +654,8 @@ async def chase_ema(netuid, wallet):
                     if args.rotate_all_wallets:
                         print("\n⏭️ Moving to next wallet...")
                         print("\n📈 Activity Summary")
-                        reports.print_summary()
-                        reports.print_wallet_summary(wallet.coldkeypub.ss58_address)
+                        reports.print_summary(hours_segments=[24])
+                        #reports.print_wallet_summary(wallet.coldkeypub.ss58_address)
                         await sub.wait_for_block()
                         break
                     
