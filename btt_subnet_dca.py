@@ -97,7 +97,7 @@ This script will chase the EMA of the price of TAO and:
     parser.add_argument(
         '--max-price-diff',
         type=float,
-        help='📈 Maximum price difference for dynamic slippage scaling (e.g., 0.20 for 20%)'
+        help='📈 Maximum price difference for dynamic slippage scaling (e.g., 0.20 for 20%%)'
     )
 
     # Print help if no arguments are provided
