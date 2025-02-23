@@ -699,7 +699,7 @@ NETUID=19  # The subnet ID (e.g., 19 for inference subnet)
 VALIDATOR_HOTKEY=<validator-hotkey>  # The validator's hotkey to delegate to (e.g., MUV validator)
 HOLDING_WALLET_NAME=your-holding-wallet-name
 HOLDING_WALLET_ADDRESS=your-holding-wallet-ss58-address
-ALPHA_RESERVE_AMOUNT=100.0  # Amount of alpha to keep in miner wallet
+ALPHA_RESERVE_AMOUNT=10.0  # Amount of alpha to keep in miner wallet
 ```
 
 3. Add your wallet passwords to `.env` (optional):
