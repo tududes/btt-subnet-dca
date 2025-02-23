@@ -13,7 +13,9 @@ class WalletPasswordManager:
         if not self.env_file.exists():
             self.env_file.touch()
         
-        # Load existing passwords
+        self.load_env()
+    
+    def load_env(self):
         load_dotenv(self.env_path)
         
     def get_env_key(self, wallet_name: str) -> str:

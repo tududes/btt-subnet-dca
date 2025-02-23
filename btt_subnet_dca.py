@@ -146,8 +146,13 @@ def get_wallet_groups():
     
     return wallet_groups
 
-def initialize_wallets(bt):
-    """Initialize and unlock all wallets at startup, collecting passwords once per coldkey"""
+def initialize_wallets(bt, wallet_name: str = None):
+    """Initialize and unlock wallets at startup, collecting passwords once per coldkey.
+    
+    Args:
+        bt: The bittensor module
+        wallet_name: Optional name of specific wallet to unlock. If None, unlocks all wallets.
+    """
     wallet_groups = get_wallet_groups()
     if not wallet_groups:
         print("❌ No wallet/hotkey pairs found")
@@ -156,11 +161,18 @@ def initialize_wallets(bt):
     unlocked_wallets = []
     pw_manager = WalletPasswordManager()
     
-    print("\n🔐 Initializing wallets for rotation...")
+    print("\n🔐 Initializing wallets...")
     print("=" * 60)
     
     # Get sorted list of coldkeys for sequential processing
     coldkeys = sorted(wallet_groups.keys())
+    
+    # Filter to specific wallet if provided
+    if wallet_name:
+        if wallet_name not in coldkeys:
+            print(f"❌ Wallet '{wallet_name}' not found")
+            sys.exit(1)
+        coldkeys = [wallet_name]
     
     for coldkey_name in coldkeys:
         hotkeys = wallet_groups[coldkey_name]
