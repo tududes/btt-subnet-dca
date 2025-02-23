@@ -177,8 +177,8 @@ async def secure_alpha_tokens_and_stake_to_vali():  # type: ignore
             
         await subtensor.close()
         
-        # execute one wallet at a time
-        break
+        # uncomment to execute one wallet (for testing)
+        #break
 
 if __name__ == "__main__":
     asyncio.run(secure_alpha_tokens_and_stake_to_vali())
