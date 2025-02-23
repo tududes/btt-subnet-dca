@@ -677,3 +677,53 @@ This script is provided as-is for educational purposes. Use it at your own risk.
 
 ### 💬 Support
 If you need help, please read the [Bittensor documentation](https://docs.bittensor.com/) and join the [Bittensor Discord](https://discord.gg/MhsTXDc5), where you could ask politely for help understanding some the concepts in this script. Do not discuss prices or trading strategies, only concepts of working with the Bittensor library.
+
+## Secure Stake Movement
+
+The `btt_miner_stake_for_dividends.py` script helps you secure your alpha tokens by moving them to a holding wallet and delegating them to a validator for yield generation. This process involves two steps:
+
+1. Transfer alpha tokens from miner wallet(s) to a secure holding wallet
+2. Delegate the transferred tokens to a validator to earn yield
+
+### Setup
+
+1. Create a new wallet to use as your holding wallet:
+```bash
+btcli wallet new_coldkey --wallet.name your-holding-wallet
+```
+
+2. Configure your `.env` file with the following settings:
+```env
+# Subnet settings for stake movement
+NETUID=19  # The subnet ID (e.g., 19 for inference subnet)
+VALIDATOR_HOTKEY=<validator-hotkey>  # The validator's hotkey to delegate to (e.g., MUV validator)
+HOLDING_WALLET_NAME=your-holding-wallet-name
+HOLDING_WALLET_ADDRESS=your-holding-wallet-ss58-address
+ALPHA_RESERVE_AMOUNT=100.0  # Amount of alpha to keep in miner wallet
+```
+
+3. Add your wallet passwords to `.env` (optional):
+```env
+BT_PW__ROOT__BITTENSOR_WALLETS_<wallet-name>_COLDKEY=your-password
+```
+
+### Usage
+
+Run the script:
+```bash
+python3 btt_miner_stake_for_dividends.py
+```
+
+The script will:
+1. Initialize and unlock your holding wallet
+2. Process each miner wallet:
+   - Transfer stake to your holding wallet
+   - Delegate the stake to the specified validator
+3. Keep `ALPHA_RESERVE_AMOUNT` of tokens in each miner wallet if specified
+
+### Security Notes
+
+- The script maintains the same hotkey ownership while moving stake between coldkeys
+- No transactions appear on the alpha token's price chart
+- Your tokens remain secure in your holding wallet while earning yield
+- You can still unstake and move tokens back to miners when needed

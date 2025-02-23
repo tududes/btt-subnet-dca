@@ -17,7 +17,8 @@ from utils.settings import (
     NETUID,
     VALIDATOR_HOTKEY,
     HOLDING_WALLET_NAME,
-    HOLDING_WALLET_ADDRESS
+    HOLDING_WALLET_ADDRESS,
+    ALPHA_RESERVE_AMOUNT
 )
 
 
@@ -80,14 +81,22 @@ async def delegate_stake_to_vali(amount_alpha: Balance, wallet: Wallet, origin_h
 
 async def send_miner_alpha_to_hodl(miner_wallet: Wallet, subtensor: AsyncSubtensor) -> bool:  # type: ignore
     """
-    Move all the stake from the miner to the holding wallet.
+    Move stake from the miner to the holding wallet, keeping the reserve amount if specified.
     """
     miner_coldkey = miner_wallet.coldkeypub.ss58_address
     miner_hotkey = miner_wallet.hotkey.ss58_address
 
     alpha_amount: Balance = await get_miner_stake(miner_coldkey, miner_hotkey, subtensor)
+    
+    # Calculate how much to transfer, respecting reserve amount
+    if float(alpha_amount) <= ALPHA_RESERVE_AMOUNT:
+        print(f"⏭️  Current stake ({float(alpha_amount):.6f} α) is less than or equal to reserve amount ({ALPHA_RESERVE_AMOUNT:.6f} α)")
+        return False
+        
+    transfer_amount = Balance.from_float(float(alpha_amount) - ALPHA_RESERVE_AMOUNT, netuid=NETUID)
+    print(f"💫 Transferring {float(transfer_amount):.6f} α, keeping {ALPHA_RESERVE_AMOUNT:.6f} α in reserve")
 
-    success: bool = await transfer_stake_to_hodl(amount_alpha=alpha_amount, wallet=miner_wallet, origin_hotkey=miner_hotkey, subtensor=subtensor)
+    success: bool = await transfer_stake_to_hodl(amount_alpha=transfer_amount, wallet=miner_wallet, origin_hotkey=miner_hotkey, subtensor=subtensor)
 
     return success
 
