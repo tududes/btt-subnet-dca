@@ -146,7 +146,7 @@ def get_wallet_groups():
     
     return wallet_groups
 
-def initialize_wallets():
+def initialize_wallets(bt):
     """Initialize and unlock all wallets at startup, collecting passwords once per coldkey"""
     wallet_groups = get_wallet_groups()
     if not wallet_groups:
@@ -175,13 +175,7 @@ def initialize_wallets():
             continue
         
         # Try to unlock the coldkey
-        try:
-            # Create a temporary wallet just to test the password
-            test_wallet = bt.wallet(name=coldkey_name, hotkey=hotkeys[0])
-            test_wallet.coldkey_file.save_password_to_env(password)
-            test_wallet.unlock_coldkey()
-            print(f"✅ Successfully unlocked coldkey: {coldkey_name}")
-            
+        try:            
             # Now use this password for all hotkeys of this coldkey
             for hotkey in hotkeys:
                 try:
@@ -664,7 +658,7 @@ async def chase_ema(netuid, wallet):
 async def main():
     if args.rotate_all_wallets:
         # Initialize all wallets first
-        unlocked_wallets = initialize_wallets()
+        unlocked_wallets = initialize_wallets(bt)
         while True:
             await rotate_wallets(args.netuid, unlocked_wallets)
     else:
