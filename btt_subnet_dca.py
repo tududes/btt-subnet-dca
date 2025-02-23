@@ -124,19 +124,6 @@ This script will chase the EMA of the price of TAO and:
     
     return args
 
-# Parse arguments and set global TEST_MODE
-args = parse_arguments()
-TEST_MODE = args.test
-
-# Import bittensor after argument parsing to avoid its arguments showing in help
-import bittensor as bt
-
-# Initialize database at the start
-db = SubnetDCADatabase()
-
-# Add after initializing database
-reports = SubnetDCAReports(db)
-
 def get_wallet_groups():
     """Group hotkeys by their coldkey (wallet) and return organized structure"""
     wallet_path = os.path.expanduser('~/.bittensor/wallets/')
@@ -652,10 +639,9 @@ async def chase_ema(netuid, wallet):
 
                     # After successful operation or skip
                     if args.rotate_all_wallets:
-                        print("\n⏭️ Moving to next wallet...")
-                        print("\n📈 Activity Summary")
                         reports.print_summary(hours_segments=[24])
                         #reports.print_wallet_summary(wallet.coldkeypub.ss58_address)
+                        print("\n⏭️ Moving to next wallet...")
                         await sub.wait_for_block()
                         break
                     
@@ -686,24 +672,38 @@ async def main():
         while True:
             await chase_ema(args.netuid, wallet)
 
-# Main execution
-if args.rotate_all_wallets:
-    asyncio.run(main())
-else:
-    # Original single wallet mode
-    try:
-        print(f"🔑 Accessing wallet: {args.wallet} with hotkey: {args.hotkey} for local use only.")
-        wallet = bt.wallet(name=args.wallet, hotkey=args.hotkey)
-        wallet.unlock_coldkey()
+if __name__ == "__main__":
+    # Parse arguments and set global TEST_MODE
+    args = parse_arguments()
+    TEST_MODE = args.test
+
+    # Import bittensor after argument parsing to avoid its arguments showing in help
+    import bittensor as bt
+
+    # Initialize database at the start
+    db = SubnetDCADatabase()
+
+    # Add after initializing database
+    reports = SubnetDCAReports(db)
+
+    # Main execution
+    if args.rotate_all_wallets:
         asyncio.run(main())
-    except Exception as e:
-        print(f"\nError accessing wallet: {e}")
-        sys.exit(1)
+    else:
+        # Original single wallet mode
+        try:
+            print(f"🔑 Accessing wallet: {args.wallet} with hotkey: {args.hotkey} for local use only.")
+            wallet = bt.wallet(name=args.wallet, hotkey=args.hotkey)
+            wallet.unlock_coldkey()
+            asyncio.run(main())
+        except Exception as e:
+            print(f"\nError accessing wallet: {e}")
+            sys.exit(1)
 
-def signal_handler(signum, frame):
-    print("\n⚠️ Received termination signal. Cleaning up...")
-    # Close any open connections
-    sys.exit(0)
+    def signal_handler(signum, frame):
+        print("\n⚠️ Received termination signal. Cleaning up...")
+        # Close any open connections
+        sys.exit(0)
 
-signal.signal(signal.SIGTERM, signal_handler)
-signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+    signal.signal(signal.SIGINT, signal_handler)
