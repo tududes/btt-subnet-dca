@@ -149,7 +149,9 @@ async def secure_alpha_tokens_and_stake_to_vali():  # type: ignore
     hodl_wallet = hodl_wallet[0]  # Take the first wallet since we only need one
 
     # Unlock all miner wallets (excluding hodl wallet)
-    miner_wallets = initialize_wallets(bt)
+    initial_wallets = initialize_wallets(bt)
+    # remove hodl wallet from the list
+    miner_wallets = [w for w in initial_wallets if w.name != HOLDING_WALLET_NAME]
     if not miner_wallets:
         print("❌ No miner wallets found to process")
         return
