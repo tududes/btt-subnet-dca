@@ -7,7 +7,7 @@ import getpass
 from utils.database import SubnetDCADatabase
 from reports import SubnetDCAReports
 from utils.password_manager import WalletPasswordManager
-from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, SAFETY_BALANCE, SLIPPAGE_PRECISION
+from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, SAFETY_BALANCE, SLIPPAGE_PRECISION, HOLDING_WALLET_NAME
 import signal
 
 
@@ -173,6 +173,15 @@ def initialize_wallets(bt, wallet_name: str = None):
             print(f"❌ Wallet '{wallet_name}' not found")
             sys.exit(1)
         coldkeys = [wallet_name]
+    else:
+        # Skip the holding wallet when processing all wallets
+        try:
+            from utils.settings import HOLDING_WALLET_NAME
+            if HOLDING_WALLET_NAME in coldkeys:
+                print(f"⏭️  Skipping holding wallet: {HOLDING_WALLET_NAME}")
+                coldkeys.remove(HOLDING_WALLET_NAME)
+        except ImportError:
+            pass  # HOLDING_WALLET_NAME not defined, process all wallets
     
     for coldkey_name in coldkeys:
         hotkeys = wallet_groups[coldkey_name]
