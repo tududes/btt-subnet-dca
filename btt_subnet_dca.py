@@ -7,7 +7,7 @@ import getpass
 from utils.database import SubnetDCADatabase
 from reports import SubnetDCAReports
 from utils.password_manager import WalletPasswordManager
-from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, SAFETY_BALANCE, SLIPPAGE_PRECISION, HOLDING_WALLET_NAME
+from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, DCA_RESERVE_ALPHA, DCA_RESERVE_TAO, SLIPPAGE_PRECISION, HOLDING_WALLET_NAME
 import signal
 
 
@@ -22,6 +22,7 @@ This script will chase the EMA of the price of TAO and:
 💡 Example usage:
   python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --min-price-diff 0.05 --test
   python3 btt_subnet_dca.py --rotate-all-wallets --netuid 19 --slippage 0.0001 --budget 0 --test
+  python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.0001 --test
 ''',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         prog='btt_subnet_dca.py'
@@ -61,7 +62,6 @@ This script will chase the EMA of the price of TAO and:
     required.add_argument(
         '--budget',
         type=float,
-        required=True,
         help='💰 Maximum TAO budget to use for trading operations (use 0 for using full balance)'
     )
     
@@ -88,6 +88,13 @@ This script will chase the EMA of the price of TAO and:
         help='🔑 Password for all wallets (required with --rotate-all-wallets)'
     )
 
+    # Add alpha harvest mode
+    parser.add_argument(
+        '--harvest-alpha',
+        action='store_true',
+        help='🔄 Harvest excess alpha to maintain TAO reserve (overrides EMA chasing)'
+    )
+
     # Add dynamic slippage option
     parser.add_argument(
         '--dynamic-slippage',
@@ -111,11 +118,15 @@ This script will chase the EMA of the price of TAO and:
     if args.rotate_all_wallets:
         if args.wallet or args.hotkey:
             parser.error("--wallet and --hotkey should not be used with --rotate-all-wallets")
-        if not all([args.netuid, args.slippage, args.budget is not None]):
+        if not args.harvest_alpha and not all([args.netuid, args.slippage, args.budget is not None]):
             parser.error("--netuid, --slippage, and --budget are required")
+        elif args.harvest_alpha and not all([args.netuid, args.slippage]):
+            parser.error("--netuid and --slippage are required with --harvest-alpha")
     else:
-        if not all([args.netuid, args.wallet, args.hotkey, args.slippage, args.budget is not None]):
-            parser.error("--netuid, --wallet, --hotkey, --slippage, and --budget are required when not using --rotate-all-wallets")
+        if args.harvest_alpha and not all([args.netuid, args.wallet, args.hotkey, args.slippage]):
+            parser.error("--netuid, --wallet, --hotkey, and --slippage are required with --harvest-alpha")
+        elif not args.harvest_alpha and not all([args.netuid, args.wallet, args.hotkey, args.slippage, args.budget is not None]):
+            parser.error("--netuid, --wallet, --hotkey, --slippage, and --budget are required when not using --rotate-all-wallets or --harvest-alpha")
     
     # Validate dynamic slippage arguments
     if args.dynamic_slippage:
@@ -146,7 +157,7 @@ def get_wallet_groups():
     
     return wallet_groups
 
-def initialize_wallets(bt, wallet_name: str = None):
+def initialize_wallets(bt, wallet_name: str = None, hotkey_name: str = None):
     """Initialize and unlock wallets at startup, collecting passwords once per coldkey.
     
     Args:
@@ -174,10 +185,14 @@ def initialize_wallets(bt, wallet_name: str = None):
             sys.exit(1)
         coldkeys = [wallet_name]
     else:
-        # Skip the holding wallet when processing all wallets
+        # Skip the holding wallet when processing all wallets ONLY in EMA chasing mode (not for alpha harvesting)
         try:
             from utils.settings import HOLDING_WALLET_NAME
-            if HOLDING_WALLET_NAME in coldkeys:
+            # Check if we're in alpha harvesting mode based on args
+            in_alpha_harvest_mode = hasattr(args, 'harvest_alpha') and args.harvest_alpha
+            
+            # Only skip the holding wallet in EMA chasing mode, not in alpha harvesting mode
+            if HOLDING_WALLET_NAME in coldkeys and not in_alpha_harvest_mode:
                 print(f"⏭️  Skipping holding wallet: {HOLDING_WALLET_NAME}")
                 coldkeys.remove(HOLDING_WALLET_NAME)
         except ImportError:
@@ -185,6 +200,13 @@ def initialize_wallets(bt, wallet_name: str = None):
     
     for coldkey_name in coldkeys:
         hotkeys = wallet_groups[coldkey_name]
+
+        if hotkey_name:
+            if hotkey_name not in hotkeys:
+                print(f"❌ Hotkey '{hotkey_name}' not found in wallet '{coldkey_name}'")
+                sys.exit(1)
+            hotkeys = [hotkey_name]
+
         print(f"\n💼 Processing wallet: {coldkey_name} with {len(hotkeys)} hotkeys")
 
         # Get password from .env or prompt user
@@ -461,9 +483,10 @@ async def chase_ema(netuid, wallet):
                             print(f"{key:20}: {value}")
                         print("-" * 40)
 
-                    # Check if balance is too low before attempting operations
-                    if float(balance) < SAFETY_BALANCE:
-                        print(f"\n⚠️  Balance ({float(balance):.6f} τ) below safety minimum ({SAFETY_BALANCE} τ)")
+                    # Check if balance is too low - only for staking scenario (when alpha price < EMA)
+                    if alpha_price < moving_price and float(balance) < DCA_RESERVE_TAO:
+                        print(f"\n⚠️  Balance ({float(balance):.6f} τ) below TAO reserve minimum ({DCA_RESERVE_TAO} τ)")
+                        print(f"    Can't stake when below minimum TAO reserve.")
                         break
 
                     # Calculate dynamic slippage if enabled
@@ -496,12 +519,18 @@ async def chase_ema(netuid, wallet):
                     # Set max_increment based on budget or available balance
                     if args.budget == 0:
                         if alpha_price > moving_price:  # Unstaking
-                            # Convert current stake to TAO to get maximum available
-                            stake_conversion = subnet_info.alpha_to_tao_with_slippage(alpha=float(current_stake))
+                            # Calculate available alpha considering reserve
+                            available_alpha = float(current_stake) - DCA_RESERVE_ALPHA
+                            if available_alpha <= 0:
+                                print(f"\n⚠️  Current stake ({float(current_stake):.6f} α) is less than or equal to alpha reserve ({DCA_RESERVE_ALPHA} α)")
+                                break
+                                
+                            # Convert available alpha to TAO to get maximum available
+                            stake_conversion = subnet_info.alpha_to_tao_with_slippage(alpha=available_alpha)
                             max_increment = float(stake_conversion[0].tao + stake_conversion[1].tao)
                         else:  # Staking
-                            # Account for safety balance when staking
-                            max_increment = float(balance) - SAFETY_BALANCE
+                            # Account for TAO reserve when staking
+                            max_increment = float(balance) - DCA_RESERVE_TAO
                     else:
                         max_increment = remaining_budget
 
@@ -577,6 +606,18 @@ async def chase_ema(netuid, wallet):
                         
                         # Convert alpha amount to TAO equivalent including slippage
                         alpha_amount = increment / alpha_price
+                        
+                        # Check if unstaking would leave less than DCA_RESERVE_ALPHA
+                        available_alpha = float(current_stake) - DCA_RESERVE_ALPHA
+                        if available_alpha <= 0:
+                            print(f"\n⚠️  Current stake ({float(current_stake):.6f} α) is less than or equal to alpha reserve ({DCA_RESERVE_ALPHA} α)")
+                            break
+                            
+                        # Adjust alpha_amount if it would leave less than DCA_RESERVE_ALPHA
+                        if alpha_amount > available_alpha:
+                            print(f"\n⚠️  Reducing unstake amount from {alpha_amount:.6f} α to {available_alpha:.6f} α to maintain alpha reserve")
+                            alpha_amount = available_alpha
+                            
                         tao_conversion = subnet_info.alpha_to_tao_with_slippage(alpha=alpha_amount)
                         total_tao_impact = float(tao_conversion[0].tao + tao_conversion[1].tao)
                         
@@ -677,15 +718,377 @@ async def chase_ema(netuid, wallet):
             print("💡 Try using ws://127.0.0.1:9944 with a local node instead")
 
 async def main():
-    if args.rotate_all_wallets:
-        # Initialize all wallets first
-        unlocked_wallets = initialize_wallets(bt)
-        while True:
-            await rotate_wallets(args.netuid, unlocked_wallets)
+    if args.harvest_alpha:
+        # Alpha harvesting mode
+        if args.rotate_all_wallets:
+            # Initialize all wallets first
+            unlocked_wallets = initialize_wallets(bt)
+            while True:
+                await rotate_wallets_for_harvest(args.netuid, unlocked_wallets)
+        else:
+            # Single wallet alpha harvesting mode
+            async with bt.AsyncSubtensor(SUBTENSOR) as sub:
+                while True:
+                    success, remaining_deficit, has_more_alpha = await harvest_alpha_for_tao_reserve(
+                        sub=sub, 
+                        wallet=wallet, 
+                        netuid=args.netuid, 
+                        target_slippage=args.slippage, 
+                        test_mode=TEST_MODE
+                    )
+                    
+                    # If there's more TAO needed and more alpha available, try again after waiting
+                    if success and remaining_deficit > 0 and has_more_alpha:
+                        print(f"\n🔄 Still need {remaining_deficit:.6f} τ and have more α available.")
+                        print(f"   Will try again after waiting...")
+                        await asyncio.sleep(BLOCK_TIME_SECONDS)
+                        continue
+                    
+                    # Wait longer before next check if we're done or can't do more
+                    print(f"\n⏳ Waiting {BLOCK_TIME_SECONDS*12} seconds before next check...")
+                    await asyncio.sleep(BLOCK_TIME_SECONDS * 12)
     else:
-        # Original single wallet mode
-        while True:
-            await chase_ema(args.netuid, wallet)
+        # Original EMA chasing mode
+        if args.rotate_all_wallets:
+            # Initialize all wallets first
+            unlocked_wallets = initialize_wallets(bt)
+            while True:
+                await rotate_wallets(args.netuid, unlocked_wallets)
+        else:
+            # Original single wallet mode
+            while True:
+                await chase_ema(args.netuid, wallet)
+
+async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, test_mode=False):
+    """Harvest excess alpha to maintain TAO reserve and replenish up to DCA_RESERVE_TAO amount.
+    
+    This function:
+    1. Checks current TAO balance
+    2. If below DCA_RESERVE_TAO, calculates how much alpha to unstake
+    3. Performs unstaking in increments that maintain slippage target
+    
+    Returns:
+        tuple: (success, remaining_deficit, has_more_alpha)
+            - success: Whether the operation was successful
+            - remaining_deficit: How much more TAO is needed to reach DCA_RESERVE_TAO
+            - has_more_alpha: Whether there's still alpha available to unstake
+    """
+    try:
+        # Get wallet information
+        coldkey_ss58 = wallet.coldkeypub.ss58_address
+        hotkey_ss58 = wallet.hotkey.ss58_address
+        cold_addr = coldkey_ss58[:5] + "..."
+        hot_addr = hotkey_ss58[:5] + "..."
+        
+        print(f"\n🔄 Alpha harvesting for wallet: cold({cold_addr}) hot({hot_addr})")
+        
+        # Get subnet info for price information
+        subnet_info = await sub.subnet(netuid)
+        alpha_price = float(subnet_info.price.tao)
+        moving_price = float(subnet_info.moving_price) * 1e11
+        
+        # Get current balances
+        try:
+            # Get stake balance (alpha)
+            current_stake = await sub.get_stake(
+                coldkey_ss58=coldkey_ss58,
+                hotkey_ss58=hotkey_ss58,
+                netuid=netuid,
+            )
+            alpha_balance = float(current_stake)
+            
+            # Get TAO balance
+            balance = await sub.get_balance(coldkey_ss58)
+            tao_balance = float(balance)
+        except Exception as e:
+            print(f"❌ Error retrieving balances: {e}")
+            return False, 0, False
+        
+        # Show current balances
+        print(f"   Current τ balance: {tao_balance:.6f} τ")
+        print(f"   Current α balance: {alpha_balance:.6f} α")
+        print(f"   τ reserve target: {DCA_RESERVE_TAO:.6f} τ")
+        print(f"   α reserve minimum: {DCA_RESERVE_ALPHA:.6f} α")
+        print(f"   Current α price: {alpha_price:.6f} τ")
+        
+        # Check if TAO balance is already sufficient
+        if tao_balance >= DCA_RESERVE_TAO:
+            print(f"   ✅ TAO balance ({tao_balance:.6f} τ) is already above reserve target ({DCA_RESERVE_TAO:.6f} τ)")
+            return True, 0, True
+        
+        # Calculate how much TAO we need
+        tao_deficit = DCA_RESERVE_TAO - tao_balance
+        print(f"   TAO deficit: {tao_deficit:.6f} τ")
+        
+        # Check if we have enough alpha to unstake while maintaining minimum reserve
+        available_alpha = alpha_balance - DCA_RESERVE_ALPHA
+        if available_alpha <= 0:
+            print(f"   ⚠️ No excess α available for harvesting (current: {alpha_balance:.6f} α, minimum: {DCA_RESERVE_ALPHA:.6f} α)")
+            return False, tao_deficit, False
+        
+        # Calculate alpha needed to cover the deficit
+        # This is a rough estimate, as slippage will affect the final amount
+        alpha_needed_estimate = tao_deficit / alpha_price
+        
+        # Limit to available alpha
+        alpha_to_unstake = min(alpha_needed_estimate, available_alpha)
+        print(f"   Estimated α needed: {alpha_needed_estimate:.6f} α")
+        print(f"   Available α for unstaking: {available_alpha:.6f} α")
+        print(f"   Will attempt to unstake: {alpha_to_unstake:.6f} α")
+        
+        # Determine optimal unstaking amount that respects slippage target
+        # We'll use binary search to find the right amount of alpha to unstake
+        print(f"\n🔍 Finding optimal unstake amount with target slippage {target_slippage:.6f} τ...")
+        
+        min_alpha = 0.0
+        max_alpha = alpha_to_unstake
+        best_alpha = 0.0
+        closest_slippage = float('inf')
+        iterations = []
+        
+        while (max_alpha - min_alpha) > 1e-12:
+            current_alpha = (min_alpha + max_alpha) / 2
+            
+            # Get expected slippage for this alpha amount
+            tao_conversion = subnet_info.alpha_to_tao_with_slippage(alpha=current_alpha)
+            slippage = float(tao_conversion[1].tao)
+            expected_tao = float(tao_conversion[0].tao)
+            
+            # Store iteration info
+            iterations.append((current_alpha, slippage, expected_tao))
+            
+            if abs(slippage - target_slippage) < abs(closest_slippage - target_slippage):
+                closest_slippage = slippage
+                best_alpha = current_alpha
+            
+            if abs(slippage - target_slippage) < 1e-12:  # Matching precision
+                break
+            elif slippage < target_slippage:
+                min_alpha = current_alpha
+            else:
+                max_alpha = current_alpha
+        
+        # Print first 3 and last 3 iterations
+        for i, (alpha, slip, tao) in enumerate(iterations):
+            if i < 3 or i >= len(iterations) - 3:
+                print(f"  • Testing {alpha:.6f} α → {slip:.6f} τ slippage, {tao:.6f} τ expected")
+            elif i == 3:
+                print("  • ...")
+        
+        # Use the best alpha amount found
+        alpha_amount = best_alpha
+        tao_conversion = subnet_info.alpha_to_tao_with_slippage(alpha=alpha_amount)
+        total_tao_impact = float(tao_conversion[0].tao + tao_conversion[1].tao)
+        
+        print(f"\n💫 Unstake Parameters")
+        print("-" * 40)
+        print(f"{'Amount to unstake':25}: {alpha_amount:.6f} α")
+        print(f"{'Expected TAO received':25}: {total_tao_impact:.6f} τ")
+        print(f"{'Slippage':25}: {float(tao_conversion[1].tao):.6f} τ")
+        print(f"{'New TAO balance (est)':25}: {(tao_balance + total_tao_impact):.6f} τ")
+        print(f"{'New alpha balance (est)':25}: {(alpha_balance - alpha_amount):.6f} α")
+        
+        # Nothing to unstake if amount is too small
+        if alpha_amount < 0.000001:
+            print(f"   ⚠️ Calculated unstake amount is too small to process")
+            return False, tao_deficit, (available_alpha > 0)
+        
+        # Perform the unstake
+        success = await perform_unstake(
+            sub=sub,
+            wallet=wallet,
+            netuid=netuid,
+            alpha_amount=alpha_amount,
+            total_tao_impact=total_tao_impact,
+            alpha_price=alpha_price,
+            moving_price=moving_price,
+            test_mode=test_mode
+        )
+        
+        if success:
+            # Calculate new balances and remaining deficit
+            new_tao_balance = tao_balance + total_tao_impact
+            new_alpha_balance = alpha_balance - alpha_amount
+            remaining_deficit = max(0, DCA_RESERVE_TAO - new_tao_balance)
+            has_more_alpha = (new_alpha_balance - DCA_RESERVE_ALPHA) > 0
+            
+            # Report on the results
+            if remaining_deficit > 0:
+                print(f"\n🔷 Harvested {alpha_amount:.6f} α for {total_tao_impact:.6f} τ")
+                print(f"   Still need {remaining_deficit:.6f} τ to reach target")
+                if has_more_alpha:
+                    print(f"   This wallet has more α available for harvesting in next rotation")
+            else:
+                print(f"\n✅ Successfully harvested {alpha_amount:.6f} α for {total_tao_impact:.6f} τ")
+                print(f"   Target TAO reserve of {DCA_RESERVE_TAO:.6f} τ reached or exceeded")
+            
+            return True, remaining_deficit, has_more_alpha
+        else:
+            print(f"❌ Failed to unstake alpha")
+            return False, tao_deficit, (available_alpha > 0)
+    except Exception as e:
+        print(f"❌ Error during alpha harvesting: {e}")
+        import traceback
+        traceback.print_exc()
+        return False, 0, False
+
+async def rotate_wallets_for_harvest(netuid, unlocked_wallets):
+    """Rotate through all wallets and harvest alpha to maintain TAO reserve.
+    
+    This function:
+    1. Fetches balances for all wallets upfront
+    2. Filters wallets that need TAO replenishment
+    3. Sorts wallets by available alpha (highest first)
+    4. Processes wallets in optimal order
+    
+    Note: Unlike the EMA chasing mode, alpha harvesting mode processes ALL wallets,
+    including the holding wallet, since we want to maintain TAO reserves in all wallets.
+    """
+    # Include all wallets (including the holding wallet) for alpha harvesting
+    wallets = unlocked_wallets
+    
+    print(f"\n🔄 Starting alpha harvesting rotation for {len(wallets)} wallets...")
+    print(f"📊 Target: Maintain at least {DCA_RESERVE_TAO} τ and {DCA_RESERVE_ALPHA} α in each wallet")
+    print("=" * 60)
+    
+    # Track wallets that need another pass
+    wallets_needing_more_tao = []
+    
+    try:
+        # Fetch all wallet balances upfront
+        wallet_data = []
+        
+        print("\n📊 Pre-fetching wallet balances...")
+        async with bt.AsyncSubtensor(SUBTENSOR) as sub:
+            # Get subnet info for price information
+            subnet_info = await sub.subnet(netuid)
+            alpha_price = float(subnet_info.price.tao)
+            
+            for wallet in wallets:
+                try:
+                    # Get stake balance (alpha)
+                    current_stake = await sub.get_stake(
+                        coldkey_ss58=wallet.coldkeypub.ss58_address,
+                        hotkey_ss58=wallet.hotkey.ss58_address,
+                        netuid=netuid,
+                    )
+                    alpha_balance = float(current_stake)
+                    
+                    # Get TAO balance
+                    balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
+                    tao_balance = float(balance)
+                    
+                    # Calculate available alpha (excess above reserve)
+                    available_alpha = max(0, alpha_balance - DCA_RESERVE_ALPHA)
+                    
+                    # Calculate TAO deficit
+                    tao_deficit = max(0, DCA_RESERVE_TAO - tao_balance)
+                    
+                    # Add wallet data
+                    cold_addr = wallet.coldkeypub.ss58_address[:5] + "..."
+                    hot_addr = wallet.hotkey.ss58_address[:5] + "..."
+                    
+                    # Add a flag to identify the holding wallet
+                    is_holding = wallet.name == HOLDING_WALLET_NAME
+                    
+                    wallet_data.append({
+                        'wallet': wallet,
+                        'name': wallet.name + (" (Holding)" if is_holding else ""),
+                        'addresses': f"cold({cold_addr}) hot({hot_addr})",
+                        'alpha_balance': alpha_balance,
+                        'tao_balance': tao_balance,
+                        'available_alpha': available_alpha,
+                        'tao_deficit': tao_deficit,
+                        'potential_tao': available_alpha * alpha_price,  # Rough estimate of potential TAO
+                        'is_holding': is_holding
+                    })
+                    
+                except Exception as e:
+                    print(f"❌ Error fetching balances for wallet {wallet.name}: {e}")
+        
+        # Filter wallets that need TAO
+        needy_wallets = [w for w in wallet_data if w['tao_deficit'] > 0]
+        
+        # Sort by available alpha (highest first)
+        needy_wallets.sort(key=lambda w: w['available_alpha'], reverse=True)
+        
+        print(f"\n📝 Found {len(needy_wallets)} of {len(wallets)} wallets below TAO reserve")
+        
+        # Print summary of wallets sorted by available alpha
+        if needy_wallets:
+            print("\n🔄 Wallets to process (sorted by available alpha):")
+            print("-" * 85)
+            print(f"{'#':3} {'Wallet':20} {'Addresses':25} {'α Balance':12} {'τ Balance':12} {'τ Deficit':12}")
+            print("-" * 85)
+            
+            for i, w in enumerate(needy_wallets):
+                print(f"{i+1:3} {w['name']:20} {w['addresses']:25} {w['alpha_balance']:12.6f} {w['tao_balance']:12.6f} {w['tao_deficit']:12.6f}")
+            
+            print("-" * 85)
+        else:
+            print("✅ All wallets have sufficient TAO reserves")
+            return
+        
+        # Process wallets that need TAO in order of available alpha
+        async with bt.AsyncSubtensor(SUBTENSOR) as sub:
+            for i, wallet_info in enumerate(needy_wallets):
+                wallet = wallet_info['wallet']
+                
+                print(f"\n[{i+1}/{len(needy_wallets)}] 🔄 Processing wallet: {wallet_info['name']}")
+                print(f"   Current α: {wallet_info['alpha_balance']:.6f}, τ: {wallet_info['tao_balance']:.6f}, Deficit: {wallet_info['tao_deficit']:.6f} τ")
+                
+                # Skip wallets with no available alpha
+                if wallet_info['available_alpha'] <= 0:
+                    print(f"   ⏭️ Skipping wallet with no available alpha")
+                    continue
+                
+                success, remaining_deficit, has_more_alpha = await harvest_alpha_for_tao_reserve(
+                    sub=sub, 
+                    wallet=wallet, 
+                    netuid=netuid, 
+                    target_slippage=args.slippage, 
+                    test_mode=TEST_MODE
+                )
+                
+                # If the wallet still needs TAO and has more alpha to unstake,
+                # add it to the list for another pass
+                if success and remaining_deficit > 0 and has_more_alpha:
+                    print(f"   📝 Adding wallet {wallet_info['name']} to queue for another pass (deficit: {remaining_deficit:.6f} τ)")
+                    wallets_needing_more_tao.append(wallet)
+                
+                print("⏳ Waiting before next wallet...")
+                await sub.wait_for_block()
+            
+            # If we have wallets needing another pass, process them
+            if wallets_needing_more_tao:
+                print(f"\n🔄 Starting second pass for {len(wallets_needing_more_tao)} wallets that need more TAO...")
+                
+                for i, wallet in enumerate(wallets_needing_more_tao):
+                    wallet_name = wallet.name
+                    if wallet_name == HOLDING_WALLET_NAME:
+                        wallet_name += " (Holding)"
+                        
+                    print(f"\n[{i+1}/{len(wallets_needing_more_tao)}] 🔄 Second pass for wallet: {wallet_name}")
+                    
+                    await harvest_alpha_for_tao_reserve(
+                        sub=sub, 
+                        wallet=wallet, 
+                        netuid=netuid, 
+                        target_slippage=args.slippage, 
+                        test_mode=TEST_MODE
+                    )
+                    
+                    print("⏳ Waiting before next wallet...")
+                    await sub.wait_for_block()
+                
+    except Exception as e:
+        print(f"❌ Error in wallet rotation: {e}")
+        print("⏳ Waiting before retry...")
+        await asyncio.sleep(BLOCK_TIME_SECONDS)
+        
+    print("\n✅ Alpha harvesting rotation complete")
+    print(f"⏳ Waiting {BLOCK_TIME_SECONDS*2} seconds before next rotation...")
+    await asyncio.sleep(BLOCK_TIME_SECONDS * 2)
 
 if __name__ == "__main__":
     # Parse arguments and set global TEST_MODE

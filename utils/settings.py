@@ -16,5 +16,6 @@ HOLDING_WALLET_ADDRESS = os.getenv('HOLDING_WALLET_ADDRESS', '')
 ALPHA_RESERVE_AMOUNT = float(os.getenv('ALPHA_RESERVE_AMOUNT', '0.0'))  # Amount of alpha to keep in miner wallet
 
 # Trading settings
-SAFETY_BALANCE = float(os.getenv('SAFETY_BALANCE', '1.0'))
+DCA_RESERVE_ALPHA = float(os.getenv('DCA_RESERVE_ALPHA', '1.0'))  # Minimum alpha balance to maintain
+DCA_RESERVE_TAO = float(os.getenv('DCA_RESERVE_TAO', '1.0'))  # Minimum TAO balance to maintain
 SLIPPAGE_PRECISION = float(os.getenv('SLIPPAGE_PRECISION', '0.0001')) 

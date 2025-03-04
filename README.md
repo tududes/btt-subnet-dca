@@ -178,11 +178,13 @@ Stake               : t72.911671858t
 (repeats each block)
 ```
 
-### 🔄 Wallet Rotation Mode
-The script can operate in two modes:
+### 🔄 Wallet Rotation Modes
+The script can operate in several modes:
 - Single wallet mode (traditional operation)
-- Wallet rotation mode (automatically cycles through multiple wallets)
+- Full wallet rotation mode (automatically cycles through multiple wallets)
+- Alpha harvest mode (automatically unstakes excess alpha to maintain reserves)
 
+#### Full Wallet Rotation
 In rotation mode, the script will:
 1. Scan your ~/.bittensor/wallets/ directory
 2. Process coldkeys sequentially in alphabetical order
@@ -217,26 +219,64 @@ Enter password for coldkey-02 (or press Enter to skip to next coldkey):
 ...
 ```
 
-### 🔄 Wallet Rotation Mode
-The script can operate in two modes:
-- Single wallet mode (traditional operation)
-- Wallet rotation mode (automatically cycles through multiple wallets)
+#### 🌱 Alpha Harvest Mode
+The script includes a dedicated alpha harvesting mode that:
+1. Unstakes excess alpha tokens from wallets 
+2. Converts them back to TAO
+3. Maintains a minimum alpha reserve in each wallet
 
-In rotation mode, the script will:
-1. Scan your ~/.bittensor/wallets/ directory
-2. Prompt for each wallet's password once
-3. Initialize all wallet/hotkey pairs
-4. Continuously rotate through unlocked wallets
-5. Allow skipping remaining wallets by pressing Enter
-6. Execute one operation per wallet before moving to next
-7. Process up to two hotkeys per coldkey
+Features:
+- Processes all wallets in sequence or just a single wallet
+- Unstakes only the amount above the configured reserve
+- Maintains alpha reserve levels across all wallets
+- Supports wallet rotation for batch processing
+- Uses binary search to find optimal unstake size with minimal slippage
 
-Note: The script will:
-- Cache passwords securely in environment variables
-- Perform one stake/unstake operation per wallet before rotating
-- Skip remaining wallets if a blank password is entered
-- Show truncated wallet addresses during operations for tracking
+How to enable:
+```bash
+# Harvest alpha for all wallets
+python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.0001 --test
 
+# Harvest alpha for a single wallet
+python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --test
+```
+
+Configuration settings in .env:
+```
+# Alpha reserve settings
+DCA_RESERVE_ALPHA=25.00  # Minimum alpha to maintain in each wallet
+DCA_RESERVE_TAO=25.00    # Target TAO to maintain in each wallet
+```
+
+Example output:
+```
+🔄 Alpha harvesting for wallet: cold(5CqSe...) hot(5DqxK...)
+   Current τ balance: 1.668723 τ
+   Current α balance: 31.783232 α
+   τ reserve target: 25.000000 τ
+   α reserve minimum: 25.000000 α
+   Current α price: 0.059226 τ
+   TAO deficit: 23.331277 τ
+   Estimated α needed: 393.936675 α
+   Available α for unstaking: 6.783232 α
+   Will attempt to unstake: 6.783232 α
+
+🔍 Finding optimal unstake amount with target slippage 0.000100 τ...
+  • Testing 3.391616 α → 0.000008 τ slippage, 0.200864 τ expected
+  • Testing 5.087424 α → 0.000017 τ slippage, 0.301290 τ expected
+  • Testing 5.935328 α → 0.000024 τ slippage, 0.351502 τ expected
+  • ...
+  • Testing 6.783232 α → 0.000031 τ slippage, 0.401712 τ expected
+
+💫 Unstake Parameters
+----------------------------------------
+Amount to unstake        : 6.783180 α
+Expected TAO received    : 0.401740 τ
+Slippage                 : 0.000031 τ
+New TAO balance (est)    : 2.070463 τ
+New alpha balance (est)  : 25.000052 α
+🧪 TEST MODE: Would have unstaked 6.783180 α ≈ 0.401740 τ from cold(5CqSe...) hot(5DqxK...)
+```
 
 ## ⚠️ Important Warnings
 
@@ -325,9 +365,12 @@ chmod 600 .env  # Restrict file permissions
   - Default: `12`
 
 #### 💰 Trading Settings
-- `SAFETY_BALANCE`: Minimum TAO balance to maintain
+- `DCA_RESERVE_TAO`: Minimum TAO balance to maintain in wallet
   - Default: `1.0`
   - Example: Set to `10.0` to keep at least 10 TAO in wallet
+- `DCA_RESERVE_ALPHA`: Minimum alpha balance to maintain when unstaking
+  - Default: `1.0`
+  - Example: Set to `25.0` to keep at least 25 alpha staked
 - `SLIPPAGE_PRECISION`: Target slippage precision in TAO
   - Default: `0.0001`
   - Example: `0.0001` TAO = $0.05 in slippage for $500 TAO
@@ -370,8 +413,8 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
 
 #### ⚡ Required Arguments:
 - `--netuid`: The subnet ID to operate on (e.g., 19 for inference subnet)
-- `--wallet`: The name of your wallet
-- `--hotkey`: The name of the hotkey to use
+- `--wallet`: The name of your wallet (not required with --rotate-all-wallets)
+- `--hotkey`: The name of the hotkey to use (not required with --rotate-all-wallets)
 - `--slippage`: Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes
 - `--budget`: Maximum TAO budget to use for trading operations (use 0 to use full available balance/stake)
 
@@ -380,6 +423,8 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
 - `--one-way-mode`: Restrict operations to only staking or only unstaking. Options: stake, unstake (default: both)
 - `--test`: Run in test mode without making actual transactions (recommended for first run)
 - `--rotate-all-wallets`: Enable wallet rotation mode (cycles through all available wallets)
+- `--harvest-alpha`: Run in alpha harvesting mode to unstake excess alpha tokens above reserve
+- `--dynamic-slippage`: Enable dynamic slippage adjustment
 
 ## 📋 Examples
 
@@ -389,226 +434,10 @@ Run with test mode to simulate operations without making actual transactions:
 python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --test
 ```
 
-Results:
-```
-🔑 Accessing wallet: coldkey-01 with hotkey: hotkey-01 for local use only.
-Enter your password: 
-Decrypting...
-
-📊 Subnet Information (Detailed View)
-============================================================
-
-🌐 Network
-------------------------------------------------------------
-Netuid                   : 19
-Subnet                   : inference
-Symbol                   : t
-
-👤 Ownership
-------------------------------------------------------------
-Owner Hotkey             : 5CFJNoUYbd...
-Owner Coldkey            : 5CFJNoUYbd...
-Registered               : 2023-12-30 04:47:08 UTC
-
-⚙️ Status
-------------------------------------------------------------
-Is Dynamic               : True
-Tempo                    : 360
-Last Step                : 4958675
-Blocks Since Last Step   : 25
-
-📈 Market
-------------------------------------------------------------
-Subnet Volume (Alpha)    : t7,550.223801190
-Subnet Volume (Tao)      : τ793.161323920
-Emission                 : 4.11%
-Price (Tao)              : 0.10505
-Moving Price (Tao)       : 0.17677
-============================================================
-
-🔍 Finding optimal trade size...
-  • Testing 0.005000 TAO → 0.000000 slippage
-
-💫 Trade Parameters
-----------------------------------------
-Size                : 0.005000 TAO
-Slippage            : 0.000000 TAO
-Budget Left         : 0.010000 TAO
-----------------------------------------
-
-📈 Price below EMA - STAKING
-🧪 TEST MODE: Would have staked 0.005000 TAO
-
-💰 Wallet Status
-----------------------------------------
-Balance             : τ2.961664286τ
-Stake               : t72.911671858t
-----------------------------------------
-
-⏳ Waiting for next block...
-
-(repeats each block)
-```
-
 ### 🚀 Production Mode Example
 Run in production mode with real transactions:
 ```bash
 python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.000001 --budget 0.01
-```
-
-Results:
-```
-🔑 Accessing wallet: coldkey-01 with hotkey: hotkey-01 for local use only.
-Enter your password: 
-Decrypting...
-
-📊 Subnet Information (Detailed View)
-============================================================
-
-🌐 Network
-------------------------------------------------------------
-Netuid                   : 19
-Subnet                   : inference
-Symbol                   : t
-
-👤 Ownership
-------------------------------------------------------------
-Owner Hotkey             : 5CFJNoUYbd...
-Owner Coldkey            : 5CFJNoUYbd...
-Registered               : 2023-12-30 04:47:04 UTC
-
-⚙️ Status
-------------------------------------------------------------
-Is Dynamic               : True
-Tempo                    : 360
-Last Step                : 4958314
-Blocks Since Last Step   : 359
-
-📈 Market
-------------------------------------------------------------
-Subnet Volume (Alpha)    : t7,546.618478178
-Subnet Volume (Tao)      : τ794.790116167
-Emission                 : 4.11%
-Price (Tao)              : 0.10532
-Moving Price (Tao)       : 0.17659
-============================================================
-
-🔍 Finding optimal trade size...
-  • Testing 0.005000 TAO → 0.000000 slippage
-
-💫 Trade Parameters
-----------------------------------------
-Size                : 0.005000 TAO
-Slippage            : 0.000000 TAO
-Budget Left         : 0.010000 TAO
-----------------------------------------
-
-📈 Price below EMA - STAKING
-✅ Successfully staked 0.005000 TAO @ 0.105317
-
-💰 Wallet Status
-----------------------------------------
-Balance             : τ2.966039286τ
-Stake               : t72.069664160t
-----------------------------------------
-
-⏳ Waiting for next block...
-
-📊 Status Update
-----------------------------------------
-Last Step           : 4958675
-Blocks Since Last Step: 0
-Volume (α)          : 7546.71
-Volume (τ)          : 794.73
-Price (τ)           : 0.10531
-EMA (τ)             : 0.17660
-Diff                : -40.37%
-----------------------------------------
-
-🔍 Finding optimal trade size...
-  • Testing 0.002500 TAO → 0.000000 slippage
-
-💫 Trade Parameters
-----------------------------------------
-Size                : 0.002500 TAO
-Slippage            : 0.000000 TAO
-Budget Left         : 0.005000 TAO
-----------------------------------------
-
-📈 Price below EMA - STAKING
-✅ Successfully staked 0.002500 TAO @ 0.105309
-
-💰 Wallet Status
-----------------------------------------
-Balance             : τ2.963539286τ
-Stake               : t72.894814175t
-----------------------------------------
-
-⏳ Waiting for next block...
-
-📊 Status Update
-----------------------------------------
-Last Step           : 4958675
-Blocks Since Last Step: 2
-Volume (α)          : 7547.88
-Volume (τ)          : 794.80
-Price (τ)           : 0.10530
-EMA (τ)             : 0.17661
-Diff                : -40.38%
-----------------------------------------
-
-🔍 Finding optimal trade size...
-  • Testing 0.001250 TAO → 0.000000 slippage
-
-💫 Trade Parameters
-----------------------------------------
-Size                : 0.001250 TAO
-Slippage            : 0.000000 TAO
-Budget Left         : 0.002500 TAO
-----------------------------------------
-
-📈 Price below EMA - STAKING
-✅ Successfully staked 0.001250 TAO @ 0.105301
-
-💰 Wallet Status
-----------------------------------------
-Balance             : τ2.962289286τ
-Stake               : t72.906210632t
-----------------------------------------
-
-⏳ Waiting for next block...
-
-📊 Status Update
-----------------------------------------
-Last Step           : 4958675
-Blocks Since Last Step: 4
-Volume (α)          : 7547.97
-Volume (τ)          : 794.74
-Price (τ)           : 0.10529
-EMA (τ)             : 0.17663
-Diff                : -40.39%
-----------------------------------------
-
-🔍 Finding optimal trade size...
-  • Testing 0.000625 TAO → 0.000000 slippage
-
-💫 Trade Parameters
-----------------------------------------
-Size                : 0.000625 TAO
-Slippage            : 0.000000 TAO
-Budget Left         : 0.001250 TAO
-----------------------------------------
-
-📈 Price below EMA - STAKING
-✅ Successfully staked 0.000625 TAO @ 0.105292
-
-💰 Wallet Status
-----------------------------------------
-Balance             : τ2.961664286τ
-Stake               : t72.911671858t
-----------------------------------------
-
-⏳ Waiting for next block...
 ```
 
 ### 🔄 Wallet Rotation Example
@@ -620,6 +449,16 @@ python3 btt_subnet_dca.py --rotate-all-wallets --netuid 19 --slippage 0.0001 --b
 Note: When using --budget 0 in rotation mode:
 - For staking: Uses full available TAO balance
 - For unstaking: Uses full available stake converted to TAO
+
+### 🌱 Alpha Harvesting Example
+Run the alpha harvesting mode to unstake excess alpha tokens:
+```bash
+# Harvest alpha from all wallets
+python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.0001 --test
+
+# Harvest alpha from a single wallet
+python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --test
+```
 
 ### 📊 Viewing Reports
 You can view reports while the bot is running by using reports.py directly:
@@ -658,7 +497,7 @@ reports.print_wallet_summary("5CnFd...")
 
 ## 🔮 Further Improvements
 
-- 🔐 Update wallet management systemt to optionally skip the password prompt
+- 🔐 Update wallet management system to optionally skip the password prompt
 - 📊 Add graphical visualizations for historical data
 - 🔔 Webhooks to a Telegram channel or Discord server for live monitoring and alerts
 - ⚙️ Add configuration file support for persistent settings
@@ -668,7 +507,6 @@ reports.print_wallet_summary("5CnFd...")
   - Larger trades when far from EMA, smaller when close
   - More intuitive for deep liquidity pools
   - Easier to configure and understand
-
 
 ## ⚠️ Final Notes
 
