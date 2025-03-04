@@ -18,7 +18,7 @@ from utils.settings import (
     VALIDATOR_HOTKEY,
     HOLDING_WALLET_NAME,
     HOLDING_WALLET_ADDRESS,
-    ALPHA_RESERVE_AMOUNT
+    MINER_RESERVE_ALPHA
 )
 
 
@@ -89,12 +89,12 @@ async def send_miner_alpha_to_hodl(miner_wallet: Wallet, subtensor: AsyncSubtens
     alpha_amount: Balance = await get_miner_stake(miner_coldkey, miner_hotkey, subtensor)
     
     # Calculate how much to transfer, respecting reserve amount
-    if float(alpha_amount) <= ALPHA_RESERVE_AMOUNT:
-        print(f"⏭️  Current stake ({float(alpha_amount):.6f} α) is less than or equal to reserve amount ({ALPHA_RESERVE_AMOUNT:.6f} α)")
+    if float(alpha_amount) <= MINER_RESERVE_ALPHA:
+        print(f"⏭️  Current stake ({float(alpha_amount):.6f} α) is less than or equal to reserve amount ({MINER_RESERVE_ALPHA:.6f} α)")
         return False
         
-    transfer_amount = Balance.from_float(float(alpha_amount) - ALPHA_RESERVE_AMOUNT, netuid=NETUID)
-    print(f"💫 Transferring {float(transfer_amount):.6f} α, keeping {ALPHA_RESERVE_AMOUNT:.6f} α in reserve")
+    transfer_amount = Balance.from_float(float(alpha_amount) - MINER_RESERVE_ALPHA, netuid=NETUID)
+    print(f"💫 Transferring {float(transfer_amount):.6f} α, keeping {MINER_RESERVE_ALPHA:.6f} α in reserve")
 
     success: bool = await transfer_stake_to_hodl(amount_alpha=transfer_amount, wallet=miner_wallet, origin_hotkey=miner_hotkey, subtensor=subtensor)
 
