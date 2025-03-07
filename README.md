@@ -193,6 +193,19 @@ In rotation mode, the script will:
 5. Initialize all hotkeys for successfully unlocked coldkeys
 6. Continuously rotate through unlocked wallet/hotkey pairs
 
+#### Wallet/Hotkey Selection Behavior
+The script has specific behavior depending on which parameters you provide:
+
+- **With `--rotate-all-wallets`**: Rotates through all available wallets and all hotkeys
+- **With `--wallet` only**: Rotates through all hotkeys for the specified wallet
+- **With `--wallet` and `--hotkey`**: Uses only the specific wallet/hotkey combination
+- **With `--harvest-alpha` and no wallet specified**: Rotates through all available keys
+
+This flexible selection allows you to target operations at different scopes:
+- Process your entire wallet collection
+- Focus on a single wallet with all its hotkeys
+- Target a specific wallet/hotkey pair
+
 Note: The script will:
 - Cache passwords securely in environment variables
 - Perform one stake/unstake operation per wallet before rotating
@@ -414,7 +427,9 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
 #### ⚡ Required Arguments:
 - `--netuid`: The subnet ID to operate on (e.g., 19 for inference subnet)
 - `--wallet`: The name of your wallet (not required with --rotate-all-wallets)
-- `--hotkey`: The name of the hotkey to use (not required with --rotate-all-wallets)
+  - When used alone, will rotate through all hotkeys for this wallet
+- `--hotkey`: The name of the hotkey to use (not required with --rotate-all-wallets or when rotating through all hotkeys of a wallet)
+  - Only specify this if you want to target a single specific wallet/hotkey pair
 - `--slippage`: Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes
 - `--budget`: Maximum TAO budget to use for trading operations (use 0 to use full available balance/stake)
 
@@ -453,10 +468,13 @@ Note: When using --budget 0 in rotation mode:
 ### 🌱 Alpha Harvesting Example
 Run the alpha harvesting mode to unstake excess alpha tokens:
 ```bash
-# Harvest alpha from all wallets
+# Harvest alpha from all wallets (rotates through all wallet/hotkey pairs)
 python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.0001 --test
 
-# Harvest alpha from a single wallet
+# Harvest alpha from all hotkeys of a specific wallet
+python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet coldkey-01 --slippage 0.0001 --test
+
+# Harvest alpha from a specific wallet/hotkey pair
 python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --test
 ```
 
@@ -523,6 +541,10 @@ The `btt_miner_stake_for_dividends.py` script helps you secure your alpha tokens
 1. Transfer alpha tokens from miner wallet(s) to a secure holding wallet
 2. Delegate the transferred tokens to a validator to earn yield
 
+### Backward Compatibility
+
+For now the script only supports one validator, which is the first one in the `VALIDATOR_HOTKEYS` list in the `.env` file.
+
 ### Setup
 
 1. Create a new wallet to use as your holding wallet:
@@ -534,34 +556,8 @@ btcli wallet new_coldkey --wallet.name your-holding-wallet
 ```env
 # Subnet settings for stake movement
 NETUID=19  # The subnet ID (e.g., 19 for inference subnet)
-VALIDATOR_HOTKEY=<validator-hotkey>  # The validator's hotkey to delegate to (e.g., MUV validator)
+VALIDATOR_HOTKEYS=<validator-hotkey-1>,<validator-hotkey-2>  # Comma-separated list of validator hotkeys to delegate to
 HOLDING_WALLET_NAME=your-holding-wallet-name
 HOLDING_WALLET_ADDRESS=your-holding-wallet-ss58-address
 ALPHA_RESERVE_AMOUNT=10.0  # Amount of alpha to keep in miner wallet
 ```
-
-3. Add your wallet passwords to `.env` (optional):
-```env
-BT_PW__ROOT__BITTENSOR_WALLETS_<wallet-name>_COLDKEY=your-password
-```
-
-### Usage
-
-Run the script:
-```bash
-python3 btt_miner_stake_for_dividends.py
-```
-
-The script will:
-1. Initialize and unlock your holding wallet
-2. Process each miner wallet:
-   - Transfer stake to your holding wallet
-   - Delegate the stake to the specified validator
-3. Keep `ALPHA_RESERVE_AMOUNT` of tokens in each miner wallet if specified
-
-### Security Notes
-
-- The script maintains the same hotkey ownership while moving stake between coldkeys
-- No transactions appear on the alpha token's price chart
-- Your tokens remain secure in your holding wallet while earning yield
-- You can still unstake and move tokens back to miners when needed

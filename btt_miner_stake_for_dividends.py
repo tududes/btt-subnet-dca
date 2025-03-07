@@ -15,7 +15,7 @@ from utils.settings import (
     SAFETY_BALANCE, 
     SLIPPAGE_PRECISION,
     NETUID,
-    VALIDATOR_HOTKEY,
+    VALIDATOR_HOTKEYS,
     HOLDING_WALLET_NAME,
     HOLDING_WALLET_ADDRESS,
     MINER_RESERVE_ALPHA
@@ -38,6 +38,10 @@ wallet coldkey, while maintaining the same hotkey ownership.
 
 logging.on()
 logging.set_debug(True)
+
+# extract the hotkey from the list of hotkeys and take the first one for backward compatibility
+VALIDATOR_HOTKEY = VALIDATOR_HOTKEYS[0]
+
 
 async def get_miner_stake(coldkey: str, hotkey: str, subtensor: AsyncSubtensor) -> Balance:  # type: ignore
     stake: dict[int, StakeInfo] = await subtensor.get_stake_for_coldkey_and_hotkey(

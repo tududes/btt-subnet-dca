@@ -7,7 +7,7 @@ import getpass
 from utils.database import SubnetDCADatabase
 from reports import SubnetDCAReports
 from utils.password_manager import WalletPasswordManager
-from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, DCA_RESERVE_ALPHA, DCA_RESERVE_TAO, SLIPPAGE_PRECISION, HOLDING_WALLET_NAME
+from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, DCA_RESERVE_ALPHA, DCA_RESERVE_TAO, SLIPPAGE_PRECISION, HOLDING_WALLET_NAME, VALIDATOR_HOTKEYS, VALIDATOR_HOTKEY
 import signal
 
 
@@ -123,9 +123,12 @@ This script will chase the EMA of the price of TAO and:
         elif args.harvest_alpha and not all([args.netuid, args.slippage]):
             parser.error("--netuid and --slippage are required with --harvest-alpha")
     else:
-        if args.harvest_alpha and not all([args.netuid, args.wallet, args.hotkey, args.slippage]):
-            parser.error("--netuid, --wallet, --hotkey, and --slippage are required with --harvest-alpha")
-        elif not args.harvest_alpha and not all([args.netuid, args.wallet, args.hotkey, args.slippage, args.budget is not None]):
+        if args.harvest_alpha:
+            if not all([args.netuid, args.wallet, args.slippage]):
+                parser.error("--netuid, --wallet, and --slippage are required with --harvest-alpha")
+            # --hotkey is optional with --harvest-alpha when --wallet is provided
+            # If --hotkey is provided, only that specific hotkey will be processed
+        elif not all([args.netuid, args.wallet, args.hotkey, args.slippage, args.budget is not None]):
             parser.error("--netuid, --wallet, --hotkey, --slippage, and --budget are required when not using --rotate-all-wallets or --harvest-alpha")
     
     # Validate dynamic slippage arguments
@@ -336,32 +339,139 @@ async def perform_stake(sub, wallet, netuid, increment, alpha_price, moving_pric
 async def perform_unstake(sub, wallet, netuid, alpha_amount, total_tao_impact, alpha_price, moving_price, test_mode=False):
     """Perform unstake operation with error handling and logging"""
     try:
+        # Get current stake from regular hotkey
+        current_stake = await sub.get_stake(
+            coldkey_ss58=wallet.coldkeypub.ss58_address,
+            hotkey_ss58=wallet.hotkey.ss58_address,
+            netuid=netuid,
+        )
+        regular_hotkey_balance = float(current_stake)
+        
+        # Get stake balances from all validator hotkeys
+        validator_balances = []
+        total_validator_balance = 0.0
+        
+        for validator_hotkey in VALIDATOR_HOTKEYS:
+            try:
+                validator_stake = await sub.get_stake(
+                    coldkey_ss58=wallet.coldkeypub.ss58_address,
+                    hotkey_ss58=validator_hotkey,
+                    netuid=netuid,
+                )
+                validator_balance = float(validator_stake)
+                total_validator_balance += validator_balance
+                
+                validator_balances.append({
+                    'hotkey': validator_hotkey,
+                    'balance': validator_balance
+                })
+                
+                print(f"  • Validator hotkey {validator_hotkey[:5]}...: {validator_balance:.6f} α")
+            except Exception as e:
+                print(f"  ⚠️ Error getting stake for validator {validator_hotkey[:5]}...: {e}")
+        
+        print(f"Distribution of α:")
+        print(f"  • Regular hotkey: {regular_hotkey_balance:.6f} α")
+        print(f"  • All validator hotkeys: {total_validator_balance:.6f} α")
+        print(f"  • Total: {(regular_hotkey_balance + total_validator_balance):.6f} α")
+        print(f"  • Need to unstake: {alpha_amount:.6f} α")
+        
+        # Sort validator hotkeys by balance (highest first) for efficient unstaking
+        validator_balances.sort(key=lambda x: x['balance'], reverse=True)
+        
+        remaining_unstake = alpha_amount
+        total_unstaked = 0.0
+        
+        # Keep track of slippage for logging
+        slippage = 0.0
+        
         if not test_mode:
-            results = await sub.unstake(
-                wallet=wallet,
-                netuid=netuid,
-                amount=bt.Balance.from_float(alpha_amount),
-            )
-            if not results:
-                raise Exception("Unstake failed")
+            # First unstake from validator hotkeys in order of balance (highest first)
+            for validator_info in validator_balances:
+                if remaining_unstake <= 0:
+                    break
+                
+                validator_hotkey = validator_info['hotkey']
+                validator_balance = validator_info['balance']
+                
+                if validator_balance > 0:
+                    validator_unstake = min(validator_balance, remaining_unstake)
+                    
+                    if validator_unstake > 0:
+                        print(f"🔄 Unstaking {validator_unstake:.6f} α from validator hotkey {validator_hotkey[:5]}...")
+                        
+                        try:
+                            results = await sub.unstake(
+                                wallet=wallet,
+                                hotkey_ss58=validator_hotkey,
+                                netuid=netuid,
+                                amount=bt.Balance.from_float(validator_unstake),
+                            )
+                            
+                            if not results:
+                                print(f"⚠️ Failed to unstake from validator hotkey {validator_hotkey[:5]}...")
+                            else:
+                                total_unstaked += validator_unstake
+                                remaining_unstake -= validator_unstake
+                                print(f"✅ Successfully unstaked {validator_unstake:.6f} α from validator hotkey {validator_hotkey[:5]}...")
+                        except Exception as e:
+                            print(f"⚠️ Error unstaking from validator hotkey {validator_hotkey[:5]}...: {e}")
             
-            print(f"✅ Successfully unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ @ {alpha_price:.6f} from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
+            # Unstake from regular hotkey if needed
+            if remaining_unstake > 0:
+                regular_unstake = min(regular_hotkey_balance, remaining_unstake)
+                
+                if regular_unstake > 0:
+                    print(f"🔄 Unstaking {regular_unstake:.6f} α from regular hotkey {wallet.hotkey.ss58_address[:5]}...")
+                    
+                    try:
+                        results = await sub.unstake(
+                            wallet=wallet,
+                            netuid=netuid,
+                            amount=bt.Balance.from_float(regular_unstake),
+                        )
+                        
+                        if not results:
+                            print(f"⚠️ Failed to unstake from regular hotkey")
+                        else:
+                            total_unstaked += regular_unstake
+                            print(f"✅ Successfully unstaked {regular_unstake:.6f} α from regular hotkey")
+                    except Exception as e:
+                        print(f"⚠️ Error unstaking from regular hotkey: {e}")
             
+            # Calculate the proportion of requested amount that was actually unstaked
+            proportion_unstaked = total_unstaked / alpha_amount if alpha_amount > 0 else 0
+            
+            # Adjust the expected tao impact proportionally
+            adjusted_tao_impact = total_tao_impact * proportion_unstaked
+            
+            # Get slippage from subnet info for logging
+            subnet_info = await sub.subnet(netuid)
+            tao_conversion = subnet_info.alpha_to_tao_with_slippage(alpha=total_unstaked)
+            slippage = float(tao_conversion[1].tao)
+            
+            print(f"✅ Successfully unstaked total of {total_unstaked:.6f} α ≈ {adjusted_tao_impact:.6f} τ @ {alpha_price:.6f}")
+            
+            # Log the operation with the adjusted values
             log_operation(
                 db=db,
                 wallet=wallet,
                 operation='unstake',
-                amount_tao=total_tao_impact,
-                amount_alpha=alpha_amount,
+                amount_tao=adjusted_tao_impact,
+                amount_alpha=total_unstaked,
                 price_tao=alpha_price,
                 ema_price=moving_price,
-                slippage=float(tao_conversion[1].tao),
+                slippage=slippage,
                 success=True,
                 test_mode=test_mode
             )
             return True
         else:
-            print(f"🧪 TEST MODE: Would have unstaked {alpha_amount:.6f} α ≈ {total_tao_impact:.6f} τ from cold({wallet.coldkeypub.ss58_address[:5]}...) hot({wallet.hotkey.ss58_address[:5]}...)")
+            print(f"🧪 TEST MODE: Would have unstaked:")
+            print(f"  • From validator hotkeys: {min(total_validator_balance, alpha_amount):.6f} α")
+            if alpha_amount > total_validator_balance:
+                print(f"  • From regular hotkey: {min(regular_hotkey_balance, alpha_amount - total_validator_balance):.6f} α")
+            print(f"  • Total: {min(regular_hotkey_balance + total_validator_balance, alpha_amount):.6f} α ≈ {total_tao_impact:.6f} τ")
             return True
     except Exception as e:
         log_operation(
@@ -372,12 +482,12 @@ async def perform_unstake(sub, wallet, netuid, alpha_amount, total_tao_impact, a
             amount_alpha=alpha_amount,
             price_tao=alpha_price,
             ema_price=moving_price,
-            slippage=float(tao_conversion[1].tao),
+            slippage=slippage if 'slippage' in locals() else 0.0,
             success=False,
             error_msg=str(e),
             test_mode=test_mode
         )
-        print(f"❌ Error unstaking: {e}")
+        print(f"❌ Error during unstake: {e}")
         return False
     
 async def chase_ema(netuid, wallet):
@@ -717,36 +827,22 @@ async def chase_ema(netuid, wallet):
         if SUBTENSOR == 'finney':
             print("💡 Try using ws://127.0.0.1:9944 with a local node instead")
 
-async def main():
+async def main(wallets=None, single_wallet=None):
+    """Main execution function.
+    
+    Args:
+        wallets: List of unlocked wallet objects for rotation
+        single_wallet: Single wallet object for specific operations
+    """
     if args.harvest_alpha:
-        # Alpha harvesting mode
-        if args.rotate_all_wallets:
-            # Initialize all wallets first
-            unlocked_wallets = initialize_wallets(bt)
+        # All wallets mode or single wallet with all hotkeys mode
+        if wallets:
+            print(f"\n🔄 Starting alpha harvesting for {'all wallets' if args.rotate_all_wallets else f'all hotkeys of wallet: {args.wallet}'}")
             while True:
-                await rotate_wallets_for_harvest(args.netuid, unlocked_wallets)
+                await rotate_wallets_for_harvest(args.netuid, wallets)
         else:
-            # Single wallet alpha harvesting mode
-            async with bt.AsyncSubtensor(SUBTENSOR) as sub:
-                while True:
-                    success, remaining_deficit, has_more_alpha = await harvest_alpha_for_tao_reserve(
-                        sub=sub, 
-                        wallet=wallet, 
-                        netuid=args.netuid, 
-                        target_slippage=args.slippage, 
-                        test_mode=TEST_MODE
-                    )
-                    
-                    # If there's more TAO needed and more alpha available, try again after waiting
-                    if success and remaining_deficit > 0 and has_more_alpha:
-                        print(f"\n🔄 Still need {remaining_deficit:.6f} τ and have more α available.")
-                        print(f"   Will try again after waiting...")
-                        await asyncio.sleep(BLOCK_TIME_SECONDS)
-                        continue
-                    
-                    # Wait longer before next check if we're done or can't do more
-                    print(f"\n⏳ Waiting {BLOCK_TIME_SECONDS*12} seconds before next check...")
-                    await asyncio.sleep(BLOCK_TIME_SECONDS * 12)
+            print("❌ No wallets were initialized")
+            sys.exit(1)
     else:
         # Original EMA chasing mode
         if args.rotate_all_wallets:
@@ -796,6 +892,25 @@ async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, te
                 netuid=netuid,
             )
             alpha_balance = float(current_stake)
+
+            # Get stake balance on validator hotkeys
+            total_validator_alpha = 0.0
+            
+            for validator_hotkey in VALIDATOR_HOTKEYS:
+                try:
+                    validator_stake = await sub.get_stake(
+                        coldkey_ss58=coldkey_ss58,
+                        hotkey_ss58=validator_hotkey,
+                        netuid=netuid,
+                    )
+                    validator_alpha_balance = float(validator_stake)
+                    total_validator_alpha += validator_alpha_balance
+                    print(f"💰 {wallet.name} α on validator {validator_hotkey[:5]}...: {validator_alpha_balance:.6f} α")
+                except Exception as e:
+                    print(f"⚠️ Error getting {wallet.name} stake on validator {validator_hotkey[:5]}...: {e}")
+            
+            print(f"💰 {wallet.name} total validator α: {total_validator_alpha:.6f} α")
+            alpha_balance += total_validator_alpha
             
             # Get TAO balance
             balance = await sub.get_balance(coldkey_ss58)
@@ -973,14 +1088,35 @@ async def rotate_wallets_for_harvest(netuid, unlocked_wallets):
                         netuid=netuid,
                     )
                     alpha_balance = float(current_stake)
+                    print(f"💰 {wallet.name} has {alpha_balance:.6f} α")
+
+                    # Get stake balance on validator hotkeys
+                    total_validator_alpha = 0.0
                     
-                    # Get TAO balance
-                    balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
-                    tao_balance = float(balance)
+                    for validator_hotkey in VALIDATOR_HOTKEYS:
+                        try:
+                            validator_stake = await sub.get_stake(
+                                coldkey_ss58=wallet.coldkeypub.ss58_address,
+                                hotkey_ss58=validator_hotkey,
+                                netuid=netuid,
+                            )
+                            validator_alpha_balance = float(validator_stake)
+                            total_validator_alpha += validator_alpha_balance
+                            print(f"💰 {wallet.name} α on validator {validator_hotkey[:5]}...: {validator_alpha_balance:.6f} α")
+                        except Exception as e:
+                            print(f"⚠️ Error getting {wallet.name} stake on validator {validator_hotkey[:5]}...: {e}")
+                    
+                    print(f"💰 {wallet.name} total validator α: {total_validator_alpha:.6f} α")
+                    alpha_balance += total_validator_alpha
                     
                     # Calculate available alpha (excess above reserve)
                     available_alpha = max(0, alpha_balance - DCA_RESERVE_ALPHA)
                     
+                    
+                    # Get TAO balance
+                    balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
+                    tao_balance = float(balance)
+                    print(f"💰 {wallet.name} has {tao_balance:.6f} τ")
                     # Calculate TAO deficit
                     tao_deficit = max(0, DCA_RESERVE_TAO - tao_balance)
                     
@@ -1090,6 +1226,26 @@ async def rotate_wallets_for_harvest(netuid, unlocked_wallets):
     print(f"⏳ Waiting {BLOCK_TIME_SECONDS*2} seconds before next rotation...")
     await asyncio.sleep(BLOCK_TIME_SECONDS * 2)
 
+def initialize_wallet(bt, wallet_name, hotkey_name):
+    """Initialize a single wallet with a specific hotkey.
+    
+    Args:
+        bt: The bittensor module
+        wallet_name: Name of wallet to unlock
+        hotkey_name: Name of hotkey to use
+    
+    Returns:
+        An unlocked wallet instance
+    """
+    try:
+        print(f"🔑 Accessing wallet: {wallet_name} with hotkey: {hotkey_name} for local use only.")
+        wallet = bt.wallet(name=wallet_name, hotkey=hotkey_name)
+        wallet.unlock_coldkey()
+        return wallet
+    except Exception as e:
+        print(f"\nError accessing wallet: {e}")
+        sys.exit(1)
+
 if __name__ == "__main__":
     # Parse arguments and set global TEST_MODE
     args = parse_arguments()
@@ -1104,19 +1260,24 @@ if __name__ == "__main__":
     # Add after initializing database
     reports = SubnetDCAReports(db)
 
-    # Main execution
+    # Process the appropriate wallet(s) before calling main()
     if args.rotate_all_wallets:
-        asyncio.run(main())
+        # Rotate all wallets mode - initialize_wallets will handle all wallets
+        all_wallets = initialize_wallets(bt)
+        asyncio.run(main(wallets=all_wallets))
     else:
-        # Original single wallet mode
-        try:
-            print(f"🔑 Accessing wallet: {args.wallet} with hotkey: {args.hotkey} for local use only.")
-            wallet = bt.wallet(name=args.wallet, hotkey=args.hotkey)
-            wallet.unlock_coldkey()
-            asyncio.run(main())
-        except Exception as e:
-            print(f"\nError accessing wallet: {e}")
-            sys.exit(1)
+        # Single wallet mode (with or without specific hotkey)
+        wallet_name = args.wallet
+        hotkey_name = args.hotkey
+        
+        if args.harvest_alpha and wallet_name and not hotkey_name:
+            # If harvesting alpha with only wallet specified, initialize all hotkeys for that wallet
+            wallet_hotkeys = initialize_wallets(bt, wallet_name=wallet_name)
+            asyncio.run(main(wallets=wallet_hotkeys))
+        else:
+            # For single wallet+hotkey, just initialize and continue normally
+            single_wallet = initialize_wallet(bt, wallet_name, hotkey_name)
+            asyncio.run(main(single_wallet=single_wallet))
 
     def signal_handler(signum, frame):
         print("\n⚠️ Received termination signal. Cleaning up...")
