@@ -7,7 +7,7 @@ import getpass
 from utils.database import SubnetDCADatabase
 from reports import SubnetDCAReports
 from utils.password_manager import WalletPasswordManager
-from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, DCA_RESERVE_ALPHA, DCA_RESERVE_TAO, SLIPPAGE_PRECISION, HOLDING_WALLET_NAME, VALIDATOR_HOTKEYS, VALIDATOR_HOTKEY
+from utils.settings import SUBTENSOR, BLOCK_TIME_SECONDS, DCA_RESERVE_ALPHA, DCA_RESERVE_TAO, SLIPPAGE_PRECISION, HOLDING_WALLET_NAME, VALIDATOR_HOTKEYS, VALIDATOR_HOTKEY, MIN_UNSTAKE_ALPHA, MIN_TAO_DEFICIT
 import signal
 
 
@@ -20,9 +20,9 @@ This script will chase the EMA of the price of TAO and:
 📉 Unstake TAO when the price is above the EMA
 
 💡 Example usage:
-  python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --min-price-diff 0.05 --test
-  python3 btt_subnet_dca.py --rotate-all-wallets --netuid 19 --slippage 0.0001 --budget 0 --test
-  python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.0001 --test
+  python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.00001 --budget 1 --min-price-diff 0.05 --test
+  python3 btt_subnet_dca.py --rotate-all-wallets --netuid 19 --slippage 0.00001 --budget 0 --test
+  python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.00001 --test
 ''',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         prog='btt_subnet_dca.py'
@@ -57,7 +57,7 @@ This script will chase the EMA of the price of TAO and:
         '--slippage',
         type=float,
         required=True,
-        help='📊 Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes'
+        help='📊 Target slippage in TAO (e.g., 0.00001). Lower values mean smaller trade sizes'
     )
     required.add_argument(
         '--budget',
@@ -105,6 +105,18 @@ This script will chase the EMA of the price of TAO and:
         '--max-price-diff',
         type=float,
         help='📈 Maximum price difference for dynamic slippage scaling (e.g., 0.20 for 20%%)'
+    )
+
+    # Add reserve override options
+    parser.add_argument(
+        '--alpha-reserve',
+        type=float,
+        help=f'🔒 Override the minimum alpha balance to maintain (default: {DCA_RESERVE_ALPHA})'
+    )
+    parser.add_argument(
+        '--tao-reserve',
+        type=float,
+        help=f'🔒 Override the minimum TAO balance to maintain (default: {DCA_RESERVE_TAO})'
     )
 
     # Print help if no arguments are provided
@@ -160,7 +172,7 @@ def get_wallet_groups():
     
     return wallet_groups
 
-def initialize_wallets(bt, wallet_name: str = None, hotkey_name: str = None):
+def initialize_wallets(bt, wallet_name: str = None, hotkey_name: str = None, args: argparse.Namespace = None):
     """Initialize and unlock wallets at startup, collecting passwords once per coldkey.
     
     Args:
@@ -834,6 +846,16 @@ async def main(wallets=None, single_wallet=None):
         wallets: List of unlocked wallet objects for rotation
         single_wallet: Single wallet object for specific operations
     """
+    # Apply CLI overrides for reserve values if provided
+    global DCA_RESERVE_ALPHA, DCA_RESERVE_TAO
+    if args.alpha_reserve is not None:
+        DCA_RESERVE_ALPHA = args.alpha_reserve
+        print(f"🔄 Using CLI override for alpha reserve: {DCA_RESERVE_ALPHA}")
+    
+    if args.tao_reserve is not None:
+        DCA_RESERVE_TAO = args.tao_reserve
+        print(f"🔄 Using CLI override for TAO reserve: {DCA_RESERVE_TAO}")
+        
     if args.harvest_alpha:
         # All wallets mode or single wallet with all hotkeys mode
         if wallets:
@@ -1003,9 +1025,16 @@ async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, te
         print(f"{'New TAO balance (est)':25}: {(tao_balance + total_tao_impact):.6f} τ")
         print(f"{'New alpha balance (est)':25}: {(alpha_balance - alpha_amount):.6f} α")
         
-        # Nothing to unstake if amount is too small
-        if alpha_amount < 0.000001:
-            print(f"   ⚠️ Calculated unstake amount is too small to process")
+        # Check if amount is below minimum unstake threshold
+        if alpha_amount < MIN_UNSTAKE_ALPHA:
+            print(f"   ⚠️ Calculated unstake amount ({alpha_amount:.6f} α) is below minimum threshold ({MIN_UNSTAKE_ALPHA:.6f} α)")
+            print(f"   ⏭️ Skipping unstake operation to avoid transaction errors")
+            
+            # If the TAO deficit is very small, consider it "good enough" to avoid endless retries
+            if tao_deficit < MIN_TAO_DEFICIT:  # If we're close enough to the target
+                print(f"   ✓ TAO deficit ({tao_deficit:.6f} τ) is below minimum threshold ({MIN_TAO_DEFICIT:.6f} τ), considering target achieved")
+                return True, 0, False  # Mark as success with no deficit to prevent further attempts
+            
             return False, tao_deficit, (available_alpha > 0)
         
         # Perform the unstake

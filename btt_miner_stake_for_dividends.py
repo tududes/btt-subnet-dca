@@ -1,5 +1,6 @@
 import asyncio
 from typing import Optional
+from datetime import datetime
 
 import bittensor as bt
 from bittensor.core.async_subtensor import AsyncSubtensor, StakeInfo
@@ -11,14 +12,11 @@ from utils.password_manager import WalletPasswordManager
 from btt_subnet_dca import initialize_wallets
 from utils.settings import (
     SUBTENSOR, 
-    BLOCK_TIME_SECONDS, 
-    SAFETY_BALANCE, 
-    SLIPPAGE_PRECISION,
     NETUID,
     VALIDATOR_HOTKEYS,
     HOLDING_WALLET_NAME,
     HOLDING_WALLET_ADDRESS,
-    MINER_RESERVE_ALPHA
+    ALPHA_RESERVE_AMOUNT
 )
 
 
@@ -93,12 +91,12 @@ async def send_miner_alpha_to_hodl(miner_wallet: Wallet, subtensor: AsyncSubtens
     alpha_amount: Balance = await get_miner_stake(miner_coldkey, miner_hotkey, subtensor)
     
     # Calculate how much to transfer, respecting reserve amount
-    if float(alpha_amount) <= MINER_RESERVE_ALPHA:
-        print(f"⏭️  Current stake ({float(alpha_amount):.6f} α) is less than or equal to reserve amount ({MINER_RESERVE_ALPHA:.6f} α)")
+    if float(alpha_amount) <= ALPHA_RESERVE_AMOUNT:
+        print(f"⏭️  Current stake ({float(alpha_amount):.6f} α) is less than or equal to reserve amount ({ALPHA_RESERVE_AMOUNT:.6f} α)")
         return False
         
-    transfer_amount = Balance.from_float(float(alpha_amount) - MINER_RESERVE_ALPHA, netuid=NETUID)
-    print(f"💫 Transferring {float(transfer_amount):.6f} α, keeping {MINER_RESERVE_ALPHA:.6f} α in reserve")
+    transfer_amount = Balance.from_float(float(alpha_amount) - ALPHA_RESERVE_AMOUNT, netuid=NETUID)
+    print(f"💫 Transferring {float(transfer_amount):.6f} α, keeping {ALPHA_RESERVE_AMOUNT:.6f} α in reserve")
 
     success: bool = await transfer_stake_to_hodl(amount_alpha=transfer_amount, wallet=miner_wallet, origin_hotkey=miner_hotkey, subtensor=subtensor)
 
@@ -186,5 +184,45 @@ async def secure_alpha_tokens_and_stake_to_vali():  # type: ignore
         # uncomment to execute one wallet (for testing)
         #break
 
+
+async def run_perpetually():  # type: ignore
+    """
+    Runs the secure_alpha_tokens_and_stake_to_vali function perpetually with a wait period between executions.
+    This function will continue indefinitely, checking for alpha tokens that need to be secured and staked.
+    """
+    # Default wait time between executions (6 hours in seconds)
+    WAIT_TIME_SECONDS = 6 * 60 * 60
+    
+    while True:
+        try:
+            print(f"🔄 Starting alpha token security and staking process at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            await secure_alpha_tokens_and_stake_to_vali()
+            print(f"✅ Completed process at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+            print(f"⏱️ Waiting for {WAIT_TIME_SECONDS//3600} hours before next execution...")
+            await asyncio.sleep(WAIT_TIME_SECONDS)
+        except Exception as e:
+            logging.error(f"Error in perpetual execution: {str(e)}")
+            print(f"⚠️ Error occurred: {str(e)}")
+            print(f"⏱️ Waiting for 30 minutes before retry...")
+            await asyncio.sleep(30 * 60)  # Wait 30 minutes before retrying after an error
+
+
 if __name__ == "__main__":
-    asyncio.run(secure_alpha_tokens_and_stake_to_vali())
+    # Import datetime for logging timestamps in the perpetual execution
+    from datetime import datetime
+    
+    # Set up signal handlers for graceful shutdown
+    import signal
+    import sys
+    
+    def signal_handler(sig, frame):
+        print("\n👋 Gracefully shutting down...")
+        sys.exit(0)
+        
+    signal.signal(signal.SIGINT, signal_handler)
+    signal.signal(signal.SIGTERM, signal_handler)
+
+    args = None
+    
+    # Run the script perpetually
+    asyncio.run(run_perpetually())

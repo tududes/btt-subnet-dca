@@ -30,4 +30,11 @@ ALPHA_RESERVE_AMOUNT = float(os.getenv('ALPHA_RESERVE_AMOUNT', '0.0'))  # Amount
 # Trading settings
 DCA_RESERVE_ALPHA = float(os.getenv('DCA_RESERVE_ALPHA', '1.0'))  # Minimum alpha balance to maintain
 DCA_RESERVE_TAO = float(os.getenv('DCA_RESERVE_TAO', '1.0'))  # Minimum TAO balance to maintain
-SLIPPAGE_PRECISION = float(os.getenv('SLIPPAGE_PRECISION', '0.0001')) 
+SLIPPAGE_PRECISION = float(os.getenv('SLIPPAGE_PRECISION', '0.0001'))
+
+# Minimum amount of alpha to unstake (prevents tiny transactions that fail)
+MIN_UNSTAKE_ALPHA = float(os.getenv('MIN_UNSTAKE_ALPHA', '0.1'))
+
+# Minimum TAO deficit to consider worth processing
+# If deficit is smaller than this amount, it's considered "good enough"
+MIN_TAO_DEFICIT = float(os.getenv('MIN_TAO_DEFICIT', '0.01')) 

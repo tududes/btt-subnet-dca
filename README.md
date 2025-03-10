@@ -80,7 +80,7 @@ python3 btt_subnet_dca.py \
     --netuid 19 \
     --wallet coldkey-01 \
     --hotkey hotkey-01 \
-    --slippage 0.0001 \
+    --slippage 0.00001 \
     --min-price-diff 0.05 \
     --max-price-diff 0.20 \
     --dynamic-slippage \
@@ -244,14 +244,18 @@ Features:
 - Maintains alpha reserve levels across all wallets
 - Supports wallet rotation for batch processing
 - Uses binary search to find optimal unstake size with minimal slippage
+- Enforces minimum unstake amounts to prevent transaction failures
 
 How to enable:
 ```bash
 # Harvest alpha for all wallets
-python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.0001 --test
+python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.00001 --test
 
-# Harvest alpha for a single wallet
-python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --test
+# Harvest alpha for a single wallet with all its hotkeys (recommended method)
+python3 btt_subnet_dca.py --netuid 19 --harvest-alpha --wallet your-wallet-name --slippage 0.00001
+
+# Harvest alpha for a specific wallet/hotkey pair
+python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet your-wallet-name --hotkey hotkey-01 --slippage 0.00001 --test
 ```
 
 Configuration settings in .env:
@@ -259,6 +263,8 @@ Configuration settings in .env:
 # Alpha reserve settings
 DCA_RESERVE_ALPHA=25.00  # Minimum alpha to maintain in each wallet
 DCA_RESERVE_TAO=25.00    # Target TAO to maintain in each wallet
+MIN_UNSTAKE_ALPHA=0.1    # Minimum alpha amount to unstake (prevents tiny transaction errors)
+MIN_TAO_DEFICIT=0.01     # Minimum TAO deficit to consider worth processing
 ```
 
 Example output:
@@ -291,6 +297,59 @@ New alpha balance (est)  : 25.000052 α
 🧪 TEST MODE: Would have unstaked 6.783180 α ≈ 0.401740 τ from cold(5CqSe...) hot(5DqxK...)
 ```
 
+### ⚙️ Automated Execution with PM2
+
+For production environments, you can use PM2 to run the script as a managed process that automatically restarts on failure and persists across system reboots.
+
+#### Requirements:
+Install PM2 if you haven't already:
+```bash
+# Install PM2 if not already installed
+if command -v pm2 &> /dev/null
+then
+    pm2 startup && pm2 save --force
+else
+    sudo apt install jq npm -y
+    sudo npm install pm2 -g && pm2 update
+    npm install pm2@latest -g && pm2 update && pm2 save --force && pm2 startup && pm2 save
+fi
+```
+
+#### Startup:
+Start the script using PM2 for continuous operation:
+```bash
+cd $HOME/btt-subnet-dca
+source .venv/bin/activate
+
+# Start the trade engine with PM2
+pm2 start btt_subnet_dca.py --name btt-subnet-dca --interpreter python3 -- --netuid 19 --harvest-alpha --wallet your-wallet-name --slippage 0.00001
+
+# Ensure PM2 starts on system boot
+pm2 startup && pm2 save --force
+
+# Watch the logs
+pm2 logs btt-subnet-dca
+```
+
+#### PM2 Log Management:
+Configure log rotation to prevent excessive disk usage:
+```bash
+# Install pm2-logrotate module if not already installed
+pm2 install pm2-logrotate
+
+# Set maximum size of logs to 50M before rotation
+pm2 set pm2-logrotate:max_size 50M
+
+# Retain 10 rotated log files
+pm2 set pm2-logrotate:retain 10
+
+# Enable compression of rotated logs
+pm2 set pm2-logrotate:compress true
+
+# Set rotation interval to every 6 hours
+pm2 set pm2-logrotate:rotateInterval '00 */6 * * *'
+```
+
 ## ⚠️ Important Warnings
 
 ### 🧪 Test Mode
@@ -311,10 +370,10 @@ When running multiple instances of this script, it's important to avoid having y
    - This creates non-overlapping price zones for each instance
    ```bash
    # Instance 1: Operates when price is 5-10% from EMA
-   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --min-price-diff 0.05 --slippage 0.0001 --budget 1
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --min-price-diff 0.05 --slippage 0.00001 --budget 1
 
    # Instance 2: Operates when price is 10-15% from EMA
-   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --min-price-diff 0.10 --slippage 0.0001 --budget 1
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --min-price-diff 0.10 --slippage 0.00001 --budget 1
    ```
 
 2. **↕️ One-Way Operation**:
@@ -322,20 +381,20 @@ When running multiple instances of this script, it's important to avoid having y
    - This prevents instances from competing in opposite directions
    ```bash
    # Instance 1: Only stakes when below EMA
-   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --one-way-mode stake --slippage 0.0001 --budget 1
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --one-way-mode stake --slippage 0.00001 --budget 1
 
    # Instance 2: Only unstakes when above EMA
-   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --slippage 0.0001 --budget 1
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --slippage 0.00001 --budget 1
    ```
 
 3. **🔀 Combined Strategy**:
    - Combine price zones with one-way operation for maximum control
    ```bash
    # Instance 1: Stakes only, 5% below EMA
-   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --one-way-mode stake --min-price-diff 0.05 --slippage 0.0001 --budget 1
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-01 --hotkey hotkey-01 --one-way-mode stake --min-price-diff 0.05 --slippage 0.00001 --budget 1
 
    # Instance 2: Unstakes only, 5% above EMA
-   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --min-price-diff 0.05 --slippage 0.0001 --budget 1
+   python3 btt_subnet_dca.py --netuid 19 --wallet wallet-02 --hotkey hotkey-02 --one-way-mode unstake --min-price-diff 0.05 --slippage 0.00001 --budget 1
    ```
 
 
@@ -385,8 +444,16 @@ chmod 600 .env  # Restrict file permissions
   - Default: `1.0`
   - Example: Set to `25.0` to keep at least 25 alpha staked
 - `SLIPPAGE_PRECISION`: Target slippage precision in TAO
-  - Default: `0.0001`
-  - Example: `0.0001` TAO = $0.05 in slippage for $500 TAO
+  - Default: `0.00001`
+  - Example: `0.00001` TAO = $0.005 in slippage for $500 TAO
+- `MIN_UNSTAKE_ALPHA`: Minimum amount of alpha to unstake in a transaction
+  - Default: `0.1`
+  - Example: Set to `0.5` to avoid failed transactions with small amounts
+  - Transactions below this threshold will be skipped to prevent errors
+- `MIN_TAO_DEFICIT`: Minimum TAO deficit to consider worth processing
+  - Default: `0.01`
+  - Example: Set to `0.1` to be less precise about meeting the exact reserve target
+  - Deficits smaller than this are considered "good enough" to avoid endless retries
 
 #### 🔑 Wallet Passwords (Optional)
 You can store wallet passwords in the `.env` file using the following format:
@@ -430,7 +497,7 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
   - When used alone, will rotate through all hotkeys for this wallet
 - `--hotkey`: The name of the hotkey to use (not required with --rotate-all-wallets or when rotating through all hotkeys of a wallet)
   - Only specify this if you want to target a single specific wallet/hotkey pair
-- `--slippage`: Target slippage in TAO (e.g., 0.0001). Lower values mean smaller trade sizes
+- `--slippage`: Target slippage in TAO (e.g., 0.00001). Lower values mean smaller trade sizes
 - `--budget`: Maximum TAO budget to use for trading operations (use 0 to use full available balance/stake)
 
 #### 🔧 Optional Arguments:
@@ -446,7 +513,7 @@ python3 btt_subnet_dca.py --help  # Show help message and available options
 ### 🧪 Test Mode Example
 Run with test mode to simulate operations without making actual transactions:
 ```bash
-python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --budget 1 --test
+python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.00001 --budget 1 --test
 ```
 
 ### 🚀 Production Mode Example
@@ -458,7 +525,7 @@ python3 btt_subnet_dca.py --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --s
 ### 🔄 Wallet Rotation Example
 Run with wallet rotation to cycle through all available wallets:
 ```bash
-python3 btt_subnet_dca.py --rotate-all-wallets --netuid 19 --slippage 0.0001 --budget 0 --test
+python3 btt_subnet_dca.py --rotate-all-wallets --netuid 19 --slippage 0.00001 --budget 0 --test
 ```
 
 Note: When using --budget 0 in rotation mode:
@@ -469,13 +536,13 @@ Note: When using --budget 0 in rotation mode:
 Run the alpha harvesting mode to unstake excess alpha tokens:
 ```bash
 # Harvest alpha from all wallets (rotates through all wallet/hotkey pairs)
-python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.0001 --test
+python3 btt_subnet_dca.py --harvest-alpha --rotate-all-wallets --netuid 19 --slippage 0.00001 --test
 
-# Harvest alpha from all hotkeys of a specific wallet
-python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet coldkey-01 --slippage 0.0001 --test
+# Harvest alpha from all hotkeys of a specific wallet (recommended for production)
+python3 btt_subnet_dca.py --netuid 19 --harvest-alpha --wallet your-wallet-name --slippage 0.00001
 
 # Harvest alpha from a specific wallet/hotkey pair
-python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet coldkey-01 --hotkey hotkey-01 --slippage 0.0001 --test
+python3 btt_subnet_dca.py --harvest-alpha --netuid 19 --wallet your-wallet-name --hotkey hotkey-01 --slippage 0.00001 --test
 ```
 
 ### 📊 Viewing Reports
@@ -561,3 +628,38 @@ HOLDING_WALLET_NAME=your-holding-wallet-name
 HOLDING_WALLET_ADDRESS=your-holding-wallet-ss58-address
 ALPHA_RESERVE_AMOUNT=10.0  # Amount of alpha to keep in miner wallet
 ```
+
+### Running the Stake Movement Script with PM2
+
+To run the `btt_miner_stake_for_dividends.py` script continuously in the background using PM2:
+
+```bash
+cd $HOME/btt-subnet-dca
+source .venv/bin/activate
+
+# Start the stake movement script for the holding wallet (default) with PM2
+pm2 start btt_miner_stake_for_dividends.py --name btt-miner-stake --interpreter python3
+
+# Ensure PM2 starts on system boot
+pm2 startup && pm2 save --force
+
+# Watch the logs
+pm2 logs btt-miner-stake
+```
+
+The script will:
+1. Run perpetually, checking wallets every 12 hours
+2. Transfer excess alpha tokens from miners to your holding wallet
+3. Delegate those tokens to your validator to earn yield
+4. Automatically restart on failure or system reboot
+
+You can adjust the frequency by modifying the `WAIT_TIME_SECONDS` variable in the script.
+
+#### Command-line Options
+
+The script supports the following command-line arguments:
+- `--wallet`: Filter to only process a specific wallet by name (default is your holding wallet)
+- `--hotkey`: Filter to only process a specific hotkey by name (requires --wallet to be specified)
+- `--all-wallets`: Process all available wallets (overrides --wallet)
+
+If no arguments are provided, the script will use the holding wallet by default. To process all wallets, use the `--all-wallets` flag.
