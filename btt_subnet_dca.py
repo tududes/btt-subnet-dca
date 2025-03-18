@@ -512,7 +512,40 @@ async def chase_ema(netuid, wallet):
 
             while True:
                 try:
-                    subnet_info = await sub.subnet(netuid)
+                    # Add retry logic and better error handling
+                    max_attempts = 3
+                    retry_delay = 5  # seconds
+                    subnet_info = None
+                    
+                    for attempt in range(1, max_attempts + 1):
+                        try:
+                            subnet_info = await sub.subnet(netuid)
+                            # Verify subnet_info is not None and has expected attributes
+                            if subnet_info is None:
+                                print(f"⚠️ Attempt {attempt}/{max_attempts}: subnet_info is None, retrying...")
+                                await asyncio.sleep(retry_delay)
+                                continue
+                                
+                            # Try accessing essential attributes to ensure subnet_info is valid
+                            _ = subnet_info.price.tao  # This will fail if price or tao is missing
+                            _ = subnet_info.moving_price  # This will fail if moving_price is missing
+                            
+                            # If we get here, we have a valid subnet_info
+                            break
+                            
+                        except Exception as e:
+                            print(f"⚠️ Attempt {attempt}/{max_attempts}: Error getting subnet info: {str(e)}")
+                            if attempt < max_attempts:
+                                print(f"Retrying in {retry_delay} seconds...")
+                                await asyncio.sleep(retry_delay)
+                            else:
+                                print("❌ Max attempts reached. Unable to get valid subnet info.")
+                                raise  # Re-raise to be caught by outer try/except
+                    
+                    # Safety check before proceeding
+                    if subnet_info is None:
+                        print("❌ Failed to get valid subnet info after all attempts.")
+                        raise Exception("Failed to get valid subnet info")
                     
                     # Get current balances with error handling
                     try:
@@ -901,9 +934,42 @@ async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, te
         print(f"\n🔄 Alpha harvesting for wallet: cold({cold_addr}) hot({hot_addr})")
         
         # Get subnet info for price information
-        subnet_info = await sub.subnet(netuid)
-        alpha_price = float(subnet_info.price.tao)
-        moving_price = float(subnet_info.moving_price) * 1e11
+        # Add retry logic and better error handling
+        max_attempts = 3
+        retry_delay = 5  # seconds
+        subnet_info = None
+        
+        for attempt in range(1, max_attempts + 1):
+            try:
+                subnet_info = await sub.subnet(netuid)
+                # Verify subnet_info is not None and has expected attributes
+                if subnet_info is None:
+                    print(f"⚠️ Attempt {attempt}/{max_attempts}: subnet_info is None, retrying...")
+                    await asyncio.sleep(retry_delay)
+                    continue
+                    
+                # Try accessing essential attributes to ensure subnet_info is valid
+                _ = subnet_info.price.tao  # This will fail if price or tao is missing
+                _ = subnet_info.moving_price  # This will fail if moving_price is missing
+                
+                # If we get here, we have a valid subnet_info
+                alpha_price = float(subnet_info.price.tao)
+                moving_price = float(subnet_info.moving_price) * 1e11
+                break
+                
+            except Exception as e:
+                print(f"⚠️ Attempt {attempt}/{max_attempts}: Error getting subnet info: {str(e)}")
+                if attempt < max_attempts:
+                    print(f"Retrying in {retry_delay} seconds...")
+                    await asyncio.sleep(retry_delay)
+                else:
+                    print("❌ Max attempts reached. Unable to get valid subnet info.")
+                    return False, 0, False  # Exit the function gracefully
+        
+        # Safety check before proceeding
+        if subnet_info is None:
+            print("❌ Failed to get valid subnet info after all attempts.")
+            return False, 0, False  # Exit the function gracefully
         
         # Get current balances
         try:
@@ -1105,8 +1171,40 @@ async def rotate_wallets_for_harvest(netuid, unlocked_wallets):
         print("\n📊 Pre-fetching wallet balances...")
         async with bt.AsyncSubtensor(SUBTENSOR) as sub:
             # Get subnet info for price information
-            subnet_info = await sub.subnet(netuid)
-            alpha_price = float(subnet_info.price.tao)
+            # Add retry logic and better error handling
+            max_attempts = 3
+            retry_delay = 5  # seconds
+            subnet_info = None
+            
+            for attempt in range(1, max_attempts + 1):
+                try:
+                    subnet_info = await sub.subnet(netuid)
+                    # Verify subnet_info is not None and has expected attributes
+                    if subnet_info is None:
+                        print(f"⚠️ Attempt {attempt}/{max_attempts}: subnet_info is None, retrying...")
+                        await asyncio.sleep(retry_delay)
+                        continue
+                        
+                    # Try accessing essential attributes to ensure subnet_info is valid
+                    _ = subnet_info.price.tao  # This will fail if price or tao is missing
+                    
+                    # If we get here, we have a valid subnet_info
+                    alpha_price = float(subnet_info.price.tao)
+                    break
+                    
+                except Exception as e:
+                    print(f"⚠️ Attempt {attempt}/{max_attempts}: Error getting subnet info: {str(e)}")
+                    if attempt < max_attempts:
+                        print(f"Retrying in {retry_delay} seconds...")
+                        await asyncio.sleep(retry_delay)
+                    else:
+                        print("❌ Max attempts reached. Unable to get valid subnet info.")
+                        return  # Exit the function gracefully
+            
+            # Safety check before proceeding
+            if subnet_info is None:
+                print("❌ Failed to get valid subnet info after all attempts.")
+                return  # Exit the function gracefully
             
             for wallet in wallets:
                 try:
