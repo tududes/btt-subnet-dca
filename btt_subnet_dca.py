@@ -512,37 +512,7 @@ async def chase_ema(netuid, wallet):
 
             while True:
                 try:
-                    # Add retry logic and better error handling
-                    max_attempts = 3
-                    retry_delay = BLOCK_TIME_SECONDS  # Use block time for retry delay
-                    subnet_info = None
-                    
-                    for attempt in range(1, max_attempts + 1):
-                        try:
-                            subnet_info = await sub.subnet(netuid)
-                            if subnet_info is None:
-                                print(f"⚠️ Attempt {attempt}/{max_attempts}: subnet_info is None, retrying...")
-                                await asyncio.sleep(retry_delay)
-                                continue
-                            
-                            # Try accessing essential attributes to verify subnet_info
-                            alpha_price = float(subnet_info.price.tao)
-                            moving_price = float(subnet_info.moving_price) * 1e11
-                            # If we get here, the data access was successful
-                            break
-                        except Exception as e:
-                            print(f"⚠️ Attempt {attempt}/{max_attempts}: Error getting subnet info: {str(e)}")
-                            if attempt < max_attempts:
-                                print(f"Retrying in {retry_delay} seconds...")
-                                await asyncio.sleep(retry_delay)
-                            else:
-                                print("❌ Max attempts reached. Unable to get valid subnet info.")
-                                raise  # Re-raise to be caught by outer try/except
-                    
-                    # Safety check before proceeding
-                    if subnet_info is None:
-                        print("❌ Failed to get valid subnet info after all attempts.")
-                        raise Exception("Failed to get valid subnet info")
+                    subnet_info = await sub.subnet(netuid)
                     
                     # Get current balances with error handling
                     try:
@@ -561,6 +531,8 @@ async def chase_ema(netuid, wallet):
                         print(f"❌ Error getting balance: {e}")
                         break
 
+                    alpha_price = float(subnet_info.price.tao)
+                    moving_price = float(subnet_info.moving_price) * 1e11
                     # Calculate what percentage the current price is of the EMA
                     price_diff_pct = (alpha_price / moving_price) - 1.0
 
@@ -906,7 +878,19 @@ async def main(wallets=None, single_wallet=None):
                 await chase_ema(args.netuid, wallet)
 
 async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, test_mode=False):
-    """Harvest excess alpha to maintain TAO reserve and replenish up to DCA_RESERVE_TAO amount."""
+    """Harvest excess alpha to maintain TAO reserve and replenish up to DCA_RESERVE_TAO amount.
+    
+    This function:
+    1. Checks current TAO balance
+    2. If below DCA_RESERVE_TAO, calculates how much alpha to unstake
+    3. Performs unstaking in increments that maintain slippage target
+    
+    Returns:
+        tuple: (success, remaining_deficit, has_more_alpha)
+            - success: Whether the operation was successful
+            - remaining_deficit: How much more TAO is needed to reach DCA_RESERVE_TAO
+            - has_more_alpha: Whether there's still alpha available to unstake
+    """
     try:
         # Get wallet information
         coldkey_ss58 = wallet.coldkeypub.ss58_address
@@ -916,72 +900,21 @@ async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, te
         
         print(f"\n🔄 Alpha harvesting for wallet: cold({cold_addr}) hot({hot_addr})")
         
-        # Get subnet info with retry logic
-        max_attempts = 3
-        retry_delay = BLOCK_TIME_SECONDS  # Use block time for retry delay
-        subnet_info = None
+        # Get subnet info for price information
+        subnet_info = await sub.subnet(netuid)
+        alpha_price = float(subnet_info.price.tao)
+        moving_price = float(subnet_info.moving_price) * 1e11
         
-        for attempt in range(1, max_attempts + 1):
-            try:
-                subnet_info = await sub.subnet(netuid)
-                if subnet_info is None:
-                    print(f"⚠️ Attempt {attempt}/{max_attempts}: subnet_info is None, retrying...")
-                    await asyncio.sleep(retry_delay)
-                    continue
-                
-                # Check if subnet_info has expected attributes
-                alpha_price = float(subnet_info.price.tao)
-                moving_price = float(subnet_info.moving_price) * 1e11
-                # If we reach here, subnet_info is valid
-                break
-            except Exception as e:
-                print(f"⚠️ Attempt {attempt}/{max_attempts}: Error getting subnet info: {str(e)}")
-                if "MetadataVersioned" in str(e) and "decoded" in str(e):
-                    print(f"⚠️ Caught Bittensor API metadata error")
-                    # Metadata errors might need longer wait times
-                    await asyncio.sleep(retry_delay * 2)
-                elif "NoneType" in str(e) and "offset" in str(e):
-                    print(f"⚠️ Caught NoneType offset error")
-                    await asyncio.sleep(retry_delay * 2)
-                elif attempt < max_attempts:
-                    print(f"Retrying in {retry_delay} seconds...")
-                    await asyncio.sleep(retry_delay)
-                else:
-                    print("❌ Max attempts reached. Unable to get valid subnet info.")
-                    return False, 0, False  # Exit gracefully
-        
-        # Safety check before proceeding
-        if subnet_info is None:
-            print("❌ Failed to get valid subnet info after all attempts.")
-            return False, 0, False
-        
-        # Get current balances with retry logic
+        # Get current balances
         try:
-            # Get stake balance with retry logic
-            retry_count = 0
-            while retry_count < max_attempts:
-                try:
-                    current_stake = await sub.get_stake(
-                        coldkey_ss58=coldkey_ss58,
-                        hotkey_ss58=hotkey_ss58,
-                        netuid=netuid,
-                    )
-                    alpha_balance = float(current_stake)
-                    break
-                except Exception as e:
-                    retry_count += 1
-                    if "MetadataVersioned" in str(e) and "decoded" in str(e) or "NoneType" in str(e) and "offset" in str(e):
-                        print(f"⚠️ Error getting stake (attempt {retry_count}/{max_attempts}): {e}")
-                        if retry_count < max_attempts:
-                            print(f"⏳ Waiting before retry...")
-                            await asyncio.sleep(retry_delay)
-                        else:
-                            print("❌ Max retry attempts reached for getting stake.")
-                            return False, 0, False
-                    else:
-                        print(f"❌ Error getting stake: {e}")
-                        return False, 0, False
-            
+            # Get stake balance (alpha)
+            current_stake = await sub.get_stake(
+                coldkey_ss58=coldkey_ss58,
+                hotkey_ss58=hotkey_ss58,
+                netuid=netuid,
+            )
+            alpha_balance = float(current_stake)
+
             # Get stake balance on validator hotkeys
             total_validator_alpha = 0.0
             
@@ -1001,26 +934,9 @@ async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, te
             print(f"💰 {wallet.name} total validator α: {total_validator_alpha:.6f} α")
             alpha_balance += total_validator_alpha
             
-            # Get TAO balance with retry logic
-            retry_count = 0
-            while retry_count < max_attempts:
-                try:
-                    balance = await sub.get_balance(coldkey_ss58)
-                    tao_balance = float(balance)
-                    break
-                except Exception as e:
-                    retry_count += 1
-                    if "MetadataVersioned" in str(e) and "decoded" in str(e) or "NoneType" in str(e) and "offset" in str(e):
-                        print(f"⚠️ Error getting balance (attempt {retry_count}/{max_attempts}): {e}")
-                        if retry_count < max_attempts:
-                            print(f"⏳ Waiting before retry...")
-                            await asyncio.sleep(retry_delay)
-                        else:
-                            print("❌ Max retry attempts reached for getting balance.")
-                            return False, 0, False
-                    else:
-                        print(f"❌ Error getting balance: {e}")
-                        return False, 0, False
+            # Get TAO balance
+            balance = await sub.get_balance(coldkey_ss58)
+            tao_balance = float(balance)
         except Exception as e:
             print(f"❌ Error retrieving balances: {e}")
             return False, 0, False
@@ -1161,7 +1077,17 @@ async def harvest_alpha_for_tao_reserve(sub, wallet, netuid, target_slippage, te
         return False, 0, False
 
 async def rotate_wallets_for_harvest(netuid, unlocked_wallets):
-    """Rotate through all wallets and harvest alpha to maintain TAO reserve."""
+    """Rotate through all wallets and harvest alpha to maintain TAO reserve.
+    
+    This function:
+    1. Fetches balances for all wallets upfront
+    2. Filters wallets that need TAO replenishment
+    3. Sorts wallets by available alpha (highest first)
+    4. Processes wallets in optimal order
+    
+    Note: Unlike the EMA chasing mode, alpha harvesting mode processes ALL wallets,
+    including the holding wallet, since we want to maintain TAO reserves in all wallets.
+    """
     # Include all wallets (including the holding wallet) for alpha harvesting
     wallets = unlocked_wallets
     
@@ -1172,132 +1098,111 @@ async def rotate_wallets_for_harvest(netuid, unlocked_wallets):
     # Track wallets that need another pass
     wallets_needing_more_tao = []
     
+    async def get_subnet_info_with_retry(sub, max_retries=3):
+        """Helper function to get subnet info with retries"""
+        for attempt in range(max_retries):
+            try:
+                subnet_info = await sub.subnet(netuid)
+                if subnet_info is None:
+                    print(f"⚠️ Subnet info is None, retrying... (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(BLOCK_TIME_SECONDS)
+                    continue
+                return subnet_info
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    print(f"⚠️ Error getting subnet info: {e}")
+                    print(f"Retrying in {BLOCK_TIME_SECONDS} seconds... (attempt {attempt + 1}/{max_retries})")
+                    await asyncio.sleep(BLOCK_TIME_SECONDS)
+                else:
+                    raise  # Re-raise the last exception if all retries failed
+        return None
+    
     try:
         # Fetch all wallet balances upfront
         wallet_data = []
         
         print("\n📊 Pre-fetching wallet balances...")
-        
-        # Set up a retry mechanism for the entire operation
-        max_rotation_attempts = 3
-        for rotation_attempt in range(1, max_rotation_attempts + 1):
-            try:
-                async with bt.AsyncSubtensor(SUBTENSOR) as sub:
-                    # Get subnet info with retry logic
-                    max_attempts = 3
-                    retry_delay = BLOCK_TIME_SECONDS  # Use block time for retry delay
-                    subnet_info = None
-                    
-                    for attempt in range(1, max_attempts + 1):
-                        try:
-                            subnet_info = await sub.subnet(netuid)
-                            if subnet_info is None:
-                                print(f"⚠️ Attempt {attempt}/{max_attempts}: subnet_info is None, retrying...")
-                                await asyncio.sleep(retry_delay)
-                                continue
-                            
-                            # Verify subnet_info is valid by accessing a key attribute
-                            alpha_price = float(subnet_info.price.tao)
-                            break
-                        except Exception as e:
-                            print(f"⚠️ Attempt {attempt}/{max_attempts}: Error getting subnet info: {str(e)}")
-                            if attempt < max_attempts:
-                                print(f"Retrying in {retry_delay} seconds...")
-                                await asyncio.sleep(retry_delay)
-                            else:
-                                print("❌ Max attempts reached. Unable to get valid subnet info.")
-                                raise  # Re-raise to be caught by outer try/except
-                    
-                    # Safety check before proceeding
-                    if subnet_info is None:
-                        print("❌ Failed to get valid subnet info after all attempts.")
-                        raise Exception("Failed to get valid subnet info")
-                    
-                    for wallet in wallets:
-                        try:
-                            # Get stake with retry logic
-                            alpha_balance = 0.0
-                            for retry in range(max_attempts):
-                                try:
-                                    current_stake = await sub.get_stake(
-                                        coldkey_ss58=wallet.coldkeypub.ss58_address,
-                                        hotkey_ss58=wallet.hotkey.ss58_address,
-                                        netuid=netuid,
-                                    )
-                                    alpha_balance = float(current_stake)
-                                    print(f"💰 {wallet.name} has {alpha_balance:.6f} α")
-                                    break
-                                except Exception as e:
-                                    if retry < max_attempts - 1:
-                                        print(f"⚠️ Error getting stake for {wallet.name} (attempt {retry+1}/{max_attempts}): {e}")
-                                        await asyncio.sleep(retry_delay)
-                                    else:
-                                        print(f"⚠️ Failed to get stake for {wallet.name} after {max_attempts} attempts: {e}")
-
-                            # Get TAO balance with retry logic
-                            tao_balance = 0.0
-                            for retry in range(max_attempts):
-                                try:
-                                    balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
-                                    tao_balance = float(balance)
-                                    print(f"💰 {wallet.name} has {tao_balance:.6f} τ")
-                                    break
-                                except Exception as e:
-                                    if retry < max_attempts - 1:
-                                        print(f"⚠️ Error getting balance for {wallet.name} (attempt {retry+1}/{max_attempts}): {e}")
-                                        await asyncio.sleep(retry_delay)
-                                    else:
-                                        print(f"⚠️ Failed to get balance for {wallet.name} after {max_attempts} attempts: {e}")
-                                
-                            # Calculate TAO deficit
-                            tao_deficit = max(0, DCA_RESERVE_TAO - tao_balance)
-                            
-                            # Add wallet data
-                            cold_addr = wallet.coldkeypub.ss58_address[:5] + "..."
-                            hot_addr = wallet.hotkey.ss58_address[:5] + "..."
-                            
-                            # Add a flag to identify the holding wallet
-                            is_holding = wallet.name == HOLDING_WALLET_NAME
-                            
-                            wallet_data.append({
-                                'wallet': wallet,
-                                'name': wallet.name + (" (Holding)" if is_holding else ""),
-                                'addresses': f"cold({cold_addr}) hot({hot_addr})",
-                                'alpha_balance': alpha_balance,
-                                'tao_balance': tao_balance,
-                                'available_alpha': alpha_balance - DCA_RESERVE_ALPHA,
-                                'tao_deficit': tao_deficit,
-                                'potential_tao': (alpha_balance - DCA_RESERVE_ALPHA) * alpha_price,  # Rough estimate of potential TAO
-                                'is_holding': is_holding
-                            })
-                            
-                        except Exception as e:
-                            print(f"❌ Error fetching balances for wallet {wallet.name}: {e}")
-                    
-                # If we get here, we successfully retrieved all wallet data
-                break
+        async with bt.AsyncSubtensor(SUBTENSOR) as sub:
+            # Get subnet info for price information with retries
+            subnet_info = await get_subnet_info_with_retry(sub)
+            if subnet_info is None:
+                print("❌ Failed to get subnet info after retries")
+                print("⏳ Waiting before retry...")
+                await asyncio.sleep(BLOCK_TIME_SECONDS)
+                return
                 
-            except Exception as e:
-                if "MetadataVersioned" in str(e) or "decoded" in str(e):
-                    print(f"⚠️ Rotation attempt {rotation_attempt}/{max_rotation_attempts}: Bittensor API error: {e}")
-                    if rotation_attempt < max_rotation_attempts:
-                        print(f"This appears to be an issue with the Bittensor API. Retrying in {BLOCK_TIME_SECONDS * 2} seconds...")
-                        await asyncio.sleep(BLOCK_TIME_SECONDS * 2)
-                    else:
-                        print("❌ Max rotation attempts reached. Unable to proceed.")
-                        raise
-                elif "NoneType" in str(e) and "offset" in str(e):
-                    print(f"⚠️ Rotation attempt {rotation_attempt}/{max_rotation_attempts}: NoneType offset error: {e}")
-                    if rotation_attempt < max_rotation_attempts:
-                        print(f"This appears to be an issue with the Bittensor chain data. Retrying in {BLOCK_TIME_SECONDS * 3} seconds...")
-                        await asyncio.sleep(BLOCK_TIME_SECONDS * 3)  # Wait a bit longer for these errors
-                    else:
-                        print("❌ Max rotation attempts reached. Unable to proceed.")
-                        raise
-                else:
-                    print(f"❌ Unexpected error in wallet rotation: {e}")
-                    raise
+            alpha_price = float(subnet_info.price.tao)
+            
+            for wallet in wallets:
+                try:
+                    # Get stake balance (alpha)
+                    current_stake = await sub.get_stake(
+                        coldkey_ss58=wallet.coldkeypub.ss58_address,
+                        hotkey_ss58=wallet.hotkey.ss58_address,
+                        netuid=netuid,
+                    )
+                    alpha_balance = float(current_stake)
+                    print(f"💰 {wallet.name} has {alpha_balance:.6f} α")
 
+                    # Get stake balance on validator hotkeys
+                    total_validator_alpha = 0.0
+                    
+                    for validator_hotkey in VALIDATOR_HOTKEYS:
+                        try:
+                            validator_stake = await sub.get_stake(
+                                coldkey_ss58=wallet.coldkeypub.ss58_address,
+                                hotkey_ss58=validator_hotkey,
+                                netuid=netuid,
+                            )
+                            validator_alpha_balance = float(validator_stake)
+                            total_validator_alpha += validator_alpha_balance
+                            print(f"💰 {wallet.name} α on validator {validator_hotkey[:5]}...: {validator_alpha_balance:.6f} α")
+                        except Exception as e:
+                            print(f"⚠️ Error getting {wallet.name} stake on validator {validator_hotkey[:5]}...: {e}")
+                            continue  # Skip this validator but continue with others
+                    
+                    print(f"💰 {wallet.name} total validator α: {total_validator_alpha:.6f} α")
+                    alpha_balance += total_validator_alpha
+                    
+                    # Calculate available alpha (excess above reserve)
+                    available_alpha = max(0, alpha_balance - DCA_RESERVE_ALPHA)
+                    
+                    # Get TAO balance
+                    balance = await sub.get_balance(wallet.coldkeypub.ss58_address)
+                    tao_balance = float(balance)
+                    print(f"💰 {wallet.name} has {tao_balance:.6f} τ")
+                    # Calculate TAO deficit
+                    tao_deficit = max(0, DCA_RESERVE_TAO - tao_balance)
+                    
+                    # Add wallet data
+                    cold_addr = wallet.coldkeypub.ss58_address[:5] + "..."
+                    hot_addr = wallet.hotkey.ss58_address[:5] + "..."
+                    
+                    # Add a flag to identify the holding wallet
+                    is_holding = wallet.name == HOLDING_WALLET_NAME
+                    
+                    wallet_data.append({
+                        'wallet': wallet,
+                        'name': wallet.name + (" (Holding)" if is_holding else ""),
+                        'addresses': f"cold({cold_addr}) hot({hot_addr})",
+                        'alpha_balance': alpha_balance,
+                        'tao_balance': tao_balance,
+                        'available_alpha': available_alpha,
+                        'tao_deficit': tao_deficit,
+                        'potential_tao': available_alpha * alpha_price,  # Rough estimate of potential TAO
+                        'is_holding': is_holding
+                    })
+                    
+                except Exception as e:
+                    print(f"❌ Error fetching balances for wallet {wallet.name}: {e}")
+                    continue  # Skip this wallet but continue with others
+        
+        if not wallet_data:
+            print("❌ No wallet data could be fetched")
+            print("⏳ Waiting before retry...")
+            await asyncio.sleep(BLOCK_TIME_SECONDS)
+            return
+            
         # Filter wallets that need TAO
         needy_wallets = [w for w in wallet_data if w['tao_deficit'] > 0]
         
@@ -1362,6 +1267,12 @@ async def rotate_wallets_for_harvest(netuid, unlocked_wallets):
                         
                     print(f"\n[{i+1}/{len(wallets_needing_more_tao)}] 🔄 Second pass for wallet: {wallet_name}")
                     
+                    # Get fresh subnet info for second pass
+                    subnet_info = await get_subnet_info_with_retry(sub)
+                    if subnet_info is None:
+                        print("❌ Failed to get subnet info for second pass")
+                        continue
+                    
                     await harvest_alpha_for_tao_reserve(
                         sub=sub, 
                         wallet=wallet, 
@@ -1409,19 +1320,6 @@ if __name__ == "__main__":
 
     # Import bittensor after argument parsing to avoid its arguments showing in help
     import bittensor as bt
-    
-    # Check Bittensor version and warn if needed
-    try:
-        bt_version = bt.__version__
-        print(f"📦 Using Bittensor version: {bt_version}")
-        
-        # Warn if using a potentially incompatible version (adapt these warnings based on known issues)
-        # This is just a warning, not a hard requirement
-        if bt_version >= "9.0.0":
-            print("ℹ️ Running with Bittensor 9.0.0 or later - robust error handling for API changes is enabled")
-    except Exception as e:
-        print(f"⚠️ Warning: Could not verify Bittensor version: {e}")
-        print("ℹ️ Error handling for potential API incompatibilities is still enabled")
 
     # Initialize database at the start
     db = SubnetDCADatabase()
@@ -1433,22 +1331,7 @@ if __name__ == "__main__":
     if args.rotate_all_wallets:
         # Rotate all wallets mode - initialize_wallets will handle all wallets
         all_wallets = initialize_wallets(bt)
-        try:
-            asyncio.run(main(wallets=all_wallets))
-        except Exception as e:
-            if "MetadataVersioned" in str(e) and "decoded" in str(e):
-                print(f"❌ Fatal error with Bittensor API metadata: {e}")
-                print("This is likely due to a change in the Bittensor API.")
-                print("Try restarting the script or updating Bittensor.")
-            elif "NoneType" in str(e) and "offset" in str(e):
-                print(f"❌ Fatal error with Bittensor chain data: {e}")
-                print("This is likely due to a temporary chain state issue.")
-                print("Try restarting the script after a few minutes.")
-            else:
-                print(f"❌ Fatal error: {e}")
-            import traceback
-            traceback.print_exc()
-            sys.exit(1)
+        asyncio.run(main(wallets=all_wallets))
     else:
         # Single wallet mode (with or without specific hotkey)
         wallet_name = args.wallet
@@ -1457,41 +1340,11 @@ if __name__ == "__main__":
         if args.harvest_alpha and wallet_name and not hotkey_name:
             # If harvesting alpha with only wallet specified, initialize all hotkeys for that wallet
             wallet_hotkeys = initialize_wallets(bt, wallet_name=wallet_name)
-            try:
-                asyncio.run(main(wallets=wallet_hotkeys))
-            except Exception as e:
-                if "MetadataVersioned" in str(e) and "decoded" in str(e):
-                    print(f"❌ Fatal error with Bittensor API metadata: {e}")
-                    print("This is likely due to a change in the Bittensor API.")
-                    print("Try restarting the script or updating Bittensor.")
-                elif "NoneType" in str(e) and "offset" in str(e):
-                    print(f"❌ Fatal error with Bittensor chain data: {e}")
-                    print("This is likely due to a temporary chain state issue.")
-                    print("Try restarting the script after a few minutes.")
-                else:
-                    print(f"❌ Fatal error: {e}")
-                import traceback
-                traceback.print_exc()
-                sys.exit(1)
+            asyncio.run(main(wallets=wallet_hotkeys))
         else:
             # For single wallet+hotkey, just initialize and continue normally
             single_wallet = initialize_wallet(bt, wallet_name, hotkey_name)
-            try:
-                asyncio.run(main(single_wallet=single_wallet))
-            except Exception as e:
-                if "MetadataVersioned" in str(e) and "decoded" in str(e):
-                    print(f"❌ Fatal error with Bittensor API metadata: {e}")
-                    print("This is likely due to a change in the Bittensor API.")
-                    print("Try restarting the script or updating Bittensor.")
-                elif "NoneType" in str(e) and "offset" in str(e):
-                    print(f"❌ Fatal error with Bittensor chain data: {e}")
-                    print("This is likely due to a temporary chain state issue.")
-                    print("Try restarting the script after a few minutes.")
-                else:
-                    print(f"❌ Fatal error: {e}")
-                import traceback
-                traceback.print_exc()
-                sys.exit(1)
+            asyncio.run(main(single_wallet=single_wallet))
 
     def signal_handler(signum, frame):
         print("\n⚠️ Received termination signal. Cleaning up...")
